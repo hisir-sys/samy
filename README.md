@@ -1,12 +1,14 @@
 # SAMY for Windows
 
+![SAMY logo](src/Samy/Assets/SamyLogo.svg)
+
 **SAMY** is an independent, local-first Windows productivity companion built with C# and WinUI 3. It brings quick tools into a compact floating workspace with an expandable dashboard.
 
 > SAMY is an independent implementation inspired by publicly visible productivity patterns. It does not include Vayli source code, proprietary assets, extracted binaries, or copied implementation details.
 
 ## Current release
 
-- **Version:** 0.2.0
+- **Version:** 0.2.1
 - **Platform:** Windows 11 x64
 - **Installer:** [SAMY-Setup.exe — latest release](https://github.com/hisir-sys/samy/releases/latest)
 - **Build:** Windows CI builds the app, publishes a self-contained x64 package, and creates the installer.
@@ -35,10 +37,11 @@ The current feature set includes:
 - In-app message preview
 - Optional weather lookup using Open-Meteo
 - Optional currency conversion using Frankfurter
-- Local session app-usage sampling (foreground app name and time only)
+- Opt-in persistent daily screen-time reports (process names and foreground duration only; stored locally)
+- Whole-device CPU and RAM monitoring (not just SAMY's own process)
 - Local clipboard, file shelf, media, notes, calendar/reminder, and settings surfaces
 
-Some integrations and deeper workflows remain in development. In particular, this is not a claim that every planned parity feature is complete: advanced clipboard management, file conversion, multi-shelf drag and drop, recurring calendar feeds, whole-device system analytics, persistent screen-time reporting, coding analytics, and authenticated revenue/analytics provider integrations remain future work. SAMY does not fabricate analytics or revenue data.
+Some integrations and deeper workflows remain in development. In particular, this is not a claim that every planned parity feature is complete: file conversion, multi-shelf drag and drop, recurring calendar feeds, extended system metrics (disk, network, battery and audio), coding analytics, native Windows notification delivery, and authenticated revenue/analytics provider integrations remain future work. SAMY does not fabricate analytics or revenue data.
 
 ## Technology
 
@@ -52,7 +55,7 @@ Some integrations and deeper workflows remain in development. In particular, thi
 
 1. Open the [latest SAMY release](https://github.com/hisir-sys/samy/releases/latest).
 2. Download **SAMY-Setup.exe**.
-3. Run the installer. It installs for the current user and adds a Start Menu shortcut.
+3. Run the installer. It installs SAMY and the required Microsoft Visual C++ runtime, then adds a Start Menu shortcut. Administrator approval is required for the runtime prerequisite.
 4. Optional Desktop and sign-in shortcuts can be selected during setup.
 
 The installer is currently unsigned. Windows may show an unknown-publisher / SmartScreen warning. Only download it from this repository's official Releases page.

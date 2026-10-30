@@ -30,21 +30,35 @@ public sealed partial class MainWindow : Window
     private readonly string _dataDirectory;
     private readonly string _notePath;
     private readonly string _clipboardPath;
+    private readonly string _clipboardPinsPath;
+    private readonly string _clipboardTimesPath;
     private readonly string _filesPath;
     private readonly string _settingsPath;
     private readonly string _remindersPath;
     private readonly string _linksPath;
     private readonly string _tasksPath;
+    private readonly string _screenTimePath;
     private readonly List<SamyLink> _savedLinks = [];
     private readonly List<SamyTask> _tasks = [];
     private static readonly HttpClient _http = new() { Timeout = TimeSpan.FromSeconds(8) };
     private readonly Dictionary<string, int> _foregroundSeconds = new(StringComparer.OrdinalIgnoreCase);
+    private readonly Dictionary<string, Dictionary<string, int>> _screenTimeData = new(StringComparer.Ordinal);
+    private DateTime _lastScreenTimeSave = DateTime.UtcNow;
+    private bool _screenTimeEnabled;
+    private ulong _lastSystemIdle;
+    private ulong _lastSystemKernel;
+    private ulong _lastSystemUser;
     private int _toolSeconds = 25 * 60;
     private bool _toolTimerRunning;
     private bool _stopwatchMode;
     private int _stopwatchSeconds;
     private readonly List<SamyReminder> _reminders = [];
     private readonly List<string> _clipboardItems = [];
+    private readonly List<string> _visibleClipboardItems = [];
+    private readonly HashSet<string> _pinnedClipboardItems = new(StringComparer.Ordinal);
+    private readonly Dictionary<string, DateTime> _clipboardCapturedAt = new(StringComparer.Ordinal);
+    private List<string> _clipboardExclusions = ["password", "one-time code", "verification code", "otp"];
+    private int _clipboardRetentionDays = 7;
     private readonly List<string> _fileItems = [];
     private TimeSpan _lastCpuTime;
     private DateTime _lastCpuSample = DateTime.UtcNow;
@@ -68,11 +82,14 @@ public sealed partial class MainWindow : Window
         Directory.CreateDirectory(_dataDirectory);
         _notePath = Path.Combine(_dataDirectory, "quick-note.txt");
         _clipboardPath = Path.Combine(_dataDirectory, "clipboard-history.json");
+        _clipboardPinsPath = Path.Combine(_dataDirectory, "clipboard-pins.json");
+        _clipboardTimesPath = Path.Combine(_dataDirectory, "clipboard-times.json");
         _filesPath = Path.Combine(_dataDirectory, "file-shelf.json");
         _settingsPath = Path.Combine(_dataDirectory, "settings.json");
         _remindersPath = Path.Combine(_dataDirectory, "reminders.json");
         _linksPath = Path.Combine(_dataDirectory, "saved-links.json");
         _tasksPath = Path.Combine(_dataDirectory, "tasks.json");
+        _screenTimePath = Path.Combine(_dataDirectory, "screen-time.json");
 
         ConfigureWindow();
         _currentProcess = Process.GetCurrentProcess();
@@ -98,16 +115,30 @@ public sealed partial class MainWindow : Window
 
     private void ConfigureWindow()
     {
-        nint hwnd = WindowNative.GetWindowHandle(this);
-        WindowId id = Win32Interop.GetWindowIdFromWindow(hwnd);
-        _appWindow = AppWindow.GetFromWindowId(id);
-        ExtendsContentIntoTitleBar = true;
-        SetTitleBar(DragRegion);
-        _appWindow.TitleBar.ExtendsContentIntoTitleBar = true;
-        _appWindow.TitleBar.ButtonBackgroundColor = Windows.UI.Color.FromArgb(0, 0, 0, 0);
-        _appWindow.TitleBar.ButtonInactiveBackgroundColor = Windows.UI.Color.FromArgb(0, 0, 0, 0);
-        _appWindow.Resize(new Windows.Graphics.SizeInt32(ExpandedWidth, ExpandedHeight));
-        PositionWindow(ExpandedWidth, ExpandedHeight);
+        try
+        {
+            nint hwnd = WindowNative.GetWindowHandle(this);
+            WindowId id = Win32Interop.GetWindowIdFromWindow(hwnd);
+            _appWindow = AppWindow.GetFromWindowId(id);
+            ExtendsContentIntoTitleBar = true;
+            SetTitleBar(DragRegion);
+            _appWindow.TitleBar.ExtendsContentIntoTitleBar = true;
+            _appWindow.TitleBar.ButtonBackgroundColor = Windows.UI.Color.FromArgb(0, 0, 0, 0);
+            _appWindow.TitleBar.ButtonInactiveBackgroundColor = Windows.UI.Color.FromArgb(0, 0, 0, 0);
+            _appWindow.Resize(new Windows.Graphics.SizeInt32(ExpandedWidth, ExpandedHeight));
+            PositionWindow(ExpandedWidth, ExpandedHeight);
+        }
+        catch (Exception ex)
+        {
+            // A title-bar/window-manager API failure must not prevent the main workspace from appearing.
+            try
+            {
+                File.AppendAllText(
+                    Path.Combine(_dataDirectory, "startup-error.log"),
+                    $"[{DateTimeOffset.Now:O}] Window configuration fallback{Environment.NewLine}{ex}{Environment.NewLine}");
+            }
+            catch { }
+        }
     }
 
     private void PositionWindow(int width, int height)
@@ -122,9 +153,24 @@ public sealed partial class MainWindow : Window
     {
         await LoadNoteAsync();
         LoadJsonList(_clipboardPath, _clipboardItems);
+        var savedPins = new List<string>();
+        LoadJsonList(_clipboardPinsPath, savedPins);
+        foreach (string pin in savedPins) _pinnedClipboardItems.Add(pin);
+        try
+        {
+            if (File.Exists(_clipboardTimesPath))
+            {
+                var savedTimes = JsonSerializer.Deserialize<Dictionary<string, DateTime>>(File.ReadAllText(_clipboardTimesPath));
+                if (savedTimes is not null) foreach (var pair in savedTimes) _clipboardCapturedAt[pair.Key] = pair.Value;
+            }
+        }
+        catch (Exception ex) when (ex is IOException or JsonException or UnauthorizedAccessException) { }
+        foreach (string item in _clipboardItems) if (!_clipboardCapturedAt.ContainsKey(item)) _clipboardCapturedAt[item] = DateTime.Now;
+        ApplyClipboardRetention();
         LoadJsonList(_filesPath, _fileItems);
         LoadReminders();
         LoadToolData();
+        LoadScreenTime();
         RefreshClipboardList();
         RefreshFilesList();
         LoadSettings();
@@ -167,24 +213,35 @@ public sealed partial class MainWindow : Window
     {
         try
         {
-            _currentProcess.Refresh();
-            TimeSpan cpuNow = _currentProcess.TotalProcessorTime;
-            DateTime sampleNow = DateTime.UtcNow;
-            double elapsedMs = (sampleNow - _lastCpuSample).TotalMilliseconds;
-            double cpuDeltaMs = (cpuNow - _lastCpuTime).TotalMilliseconds;
-            if (elapsedMs > 0)
+            if (GetSystemTimes(out var idle, out var kernel, out var user))
             {
-                double cpuPercent = cpuDeltaMs / (elapsedMs * Environment.ProcessorCount) * 100d;
-                CpuText.Text = $"SAMY CPU · {Math.Clamp(cpuPercent, 0d, 100d):0}%";
+                ulong idleNow = FileTimeToUInt64(idle);
+                ulong kernelNow = FileTimeToUInt64(kernel);
+                ulong userNow = FileTimeToUInt64(user);
+                if (_lastSystemKernel != 0)
+                {
+                    ulong totalDelta = (kernelNow - _lastSystemKernel) + (userNow - _lastSystemUser);
+                    ulong idleDelta = idleNow - _lastSystemIdle;
+                    double cpuPercent = totalDelta == 0 ? 0 : 100d * (totalDelta - idleDelta) / totalDelta;
+                    CpuText.Text = $"PC CPU · {Math.Clamp(cpuPercent, 0d, 100d):0}%";
+                }
+                _lastSystemIdle = idleNow;
+                _lastSystemKernel = kernelNow;
+                _lastSystemUser = userNow;
             }
-            _lastCpuTime = cpuNow;
-            _lastCpuSample = sampleNow;
-            MemoryText.Text = $"SAMY memory · {_currentProcess.WorkingSet64 / 1024d / 1024d:0} MB";
+
+            var memory = new MemoryStatusEx { Length = (uint)Marshal.SizeOf<MemoryStatusEx>() };
+            if (GlobalMemoryStatusEx(ref memory))
+            {
+                double totalGb = memory.TotalPhysical / 1024d / 1024d / 1024d;
+                double usedGb = (memory.TotalPhysical - memory.AvailablePhysical) / 1024d / 1024d / 1024d;
+                MemoryText.Text = $"PC RAM · {usedGb:0.0} / {totalGb:0.0} GB ({memory.MemoryLoad}%)";
+            }
         }
-        catch (InvalidOperationException)
+        catch (Exception ex) when (ex is InvalidOperationException or System.ComponentModel.Win32Exception or EntryPointNotFoundException)
         {
-            CpuText.Text = "CPU unavailable";
-            MemoryText.Text = "Memory unavailable";
+            CpuText.Text = "PC CPU unavailable";
+            MemoryText.Text = "PC memory unavailable";
         }
     }
 
@@ -319,11 +376,19 @@ public sealed partial class MainWindow : Window
                 JsonElement root = doc.RootElement;
                 _alwaysOnTop = root.TryGetProperty("alwaysOnTop", out var pin) && pin.GetBoolean();
                 _clipboardEnabled = root.TryGetProperty("clipboardEnabled", out var clip) && clip.GetBoolean();
+                _screenTimeEnabled = root.TryGetProperty("screenTimeEnabled", out var screen) && screen.GetBoolean();
+                if (root.TryGetProperty("clipboardRetentionDays", out var retention) && retention.TryGetInt32(out int days))
+                    _clipboardRetentionDays = days is 1 or 7 or 30 ? days : 0;
+                if (root.TryGetProperty("clipboardExclusions", out var exclusions) && exclusions.ValueKind == JsonValueKind.Array)
+                    _clipboardExclusions = exclusions.EnumerateArray().Where(v => v.ValueKind == JsonValueKind.String).Select(v => v.GetString() ?? "").Where(v => v.Length > 0).ToList();
             }
             using Microsoft.Win32.RegistryKey? key = Microsoft.Win32.Registry.CurrentUser.OpenSubKey(@"Software\Microsoft\Windows\CurrentVersion\Run");
             StartWithWindowsToggle.IsOn = key?.GetValue("SAMY") is not null;
             AlwaysOnTopToggle.IsOn = _alwaysOnTop;
             ClipboardToggle.IsOn = _clipboardEnabled;
+            ScreenTimeToggle.IsOn = _screenTimeEnabled;
+            ClipboardRetentionBox.SelectedIndex = _clipboardRetentionDays switch { 1 => 0, 7 => 1, 30 => 2, _ => 3 };
+            ClipboardExclusionsBox.Text = string.Join(", ", _clipboardExclusions);
             PinButton.Content = _alwaysOnTop ? "PINNED" : "PIN";
             if (_clipboardEnabled)
             {
@@ -346,7 +411,7 @@ public sealed partial class MainWindow : Window
     {
         try
         {
-            File.WriteAllText(_settingsPath, JsonSerializer.Serialize(new { alwaysOnTop = _alwaysOnTop, clipboardEnabled = _clipboardEnabled }));
+            File.WriteAllText(_settingsPath, JsonSerializer.Serialize(new { alwaysOnTop = _alwaysOnTop, clipboardEnabled = _clipboardEnabled, clipboardRetentionDays = _clipboardRetentionDays, clipboardExclusions = _clipboardExclusions, screenTimeEnabled = _screenTimeEnabled }));
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { }
     }
@@ -363,9 +428,23 @@ public sealed partial class MainWindow : Window
             if (!data.Contains(StandardDataFormats.Text)) return;
             string text = (await data.GetTextAsync()).Trim();
             if (string.IsNullOrWhiteSpace(text) || text.Length > 4000 || _clipboardItems.FirstOrDefault() == text) return;
+            if (_clipboardExclusions.Any(word => text.Contains(word, StringComparison.OrdinalIgnoreCase)))
+            {
+                ClipboardStatusText.Text = "Skipped: matched a sensitive-content exclusion";
+                return;
+            }
             _clipboardItems.Insert(0, text);
-            if (_clipboardItems.Count > MaxClipboardItems) _clipboardItems.RemoveRange(MaxClipboardItems, _clipboardItems.Count - MaxClipboardItems);
-            SaveJsonList(_clipboardPath, _clipboardItems);
+            _clipboardCapturedAt[text] = DateTime.Now;
+            while (_clipboardItems.Count > MaxClipboardItems)
+            {
+                int removable = _clipboardItems.FindLastIndex(item => !_pinnedClipboardItems.Contains(item));
+                if (removable < 0) break;
+                string removed = _clipboardItems[removable];
+                _clipboardItems.RemoveAt(removable);
+                _clipboardCapturedAt.Remove(removed);
+            }
+            ApplyClipboardRetention();
+            SaveClipboardData();
             RefreshClipboardList();
         }
         catch (Exception ex) when (ex is COMException or InvalidOperationException or UnauthorizedAccessException) { }
@@ -374,17 +453,89 @@ public sealed partial class MainWindow : Window
     private void RefreshClipboardList()
     {
         ClipboardList.Items.Clear();
-        foreach (string item in _clipboardItems)
-            ClipboardList.Items.Add(item.Length > 110 ? item[..110] + "…" : item);
-        if (ClipboardList.Items.Count == 0) ClipboardList.Items.Add("No saved text yet");
+        _visibleClipboardItems.Clear();
+        string query = ClipboardSearchBox?.Text?.Trim() ?? "";
+        foreach (string item in _clipboardItems.Where(item => query.Length == 0 || item.Contains(query, StringComparison.OrdinalIgnoreCase)))
+        {
+            _visibleClipboardItems.Add(item);
+            string pin = _pinnedClipboardItems.Contains(item) ? "📌 " : "";
+            ClipboardList.Items.Add(pin + (item.Length > 110 ? item[..110] + "…" : item));
+        }
+        if (ClipboardList.Items.Count == 0) ClipboardList.Items.Add(query.Length == 0 ? "No saved text yet" : "No matches");
+    }
+
+    private void ClipboardSearchBox_TextChanged(object sender, TextChangedEventArgs e) => RefreshClipboardList();
+
+    private void SaveClipboardData()
+    {
+        SaveJsonList(_clipboardPath, _clipboardItems);
+        SaveJsonList(_clipboardPinsPath, _pinnedClipboardItems.ToList());
+        try { File.WriteAllText(_clipboardTimesPath, JsonSerializer.Serialize(_clipboardCapturedAt)); }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { }
+    }
+
+    private void ApplyClipboardRetention()
+    {
+        if (_clipboardRetentionDays <= 0) return;
+        DateTime cutoff = DateTime.Now.AddDays(-_clipboardRetentionDays);
+        foreach (string item in _clipboardItems.ToList())
+        {
+            if (_pinnedClipboardItems.Contains(item)) continue;
+            if (_clipboardCapturedAt.TryGetValue(item, out DateTime captured) && captured < cutoff)
+            {
+                _clipboardItems.Remove(item);
+                _clipboardCapturedAt.Remove(item);
+            }
+        }
+    }
+
+    private void PinClipboardButton_Click(object sender, RoutedEventArgs e)
+    {
+        int index = ClipboardList.SelectedIndex;
+        if (index < 0 || index >= _visibleClipboardItems.Count) return;
+        string item = _visibleClipboardItems[index];
+        if (!_pinnedClipboardItems.Add(item)) _pinnedClipboardItems.Remove(item);
+        SaveClipboardData();
+        RefreshClipboardList();
+        ClipboardStatusText.Text = _pinnedClipboardItems.Contains(item) ? "Item pinned · excluded from retention" : "Item unpinned";
+    }
+
+    private void DeleteClipboardButton_Click(object sender, RoutedEventArgs e)
+    {
+        int index = ClipboardList.SelectedIndex;
+        if (index < 0 || index >= _visibleClipboardItems.Count) return;
+        string item = _visibleClipboardItems[index];
+        _clipboardItems.Remove(item);
+        _pinnedClipboardItems.Remove(item);
+        _clipboardCapturedAt.Remove(item);
+        SaveClipboardData();
+        RefreshClipboardList();
+        ClipboardStatusText.Text = "Selected item deleted";
+    }
+
+    private void ClipboardRetentionBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (_loadingSettings || ClipboardRetentionBox.SelectedIndex < 0) return;
+        _clipboardRetentionDays = ClipboardRetentionBox.SelectedIndex switch { 0 => 1, 1 => 7, 2 => 30, _ => 0 };
+    }
+
+    private void SaveClipboardPrivacyButton_Click(object sender, RoutedEventArgs e)
+    {
+        _clipboardExclusions = ClipboardExclusionsBox.Text.Split(',', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries)
+            .Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+        ApplyClipboardRetention();
+        SaveClipboardData();
+        SaveSettings();
+        RefreshClipboardList();
+        ClipboardStatusText.Text = "Clipboard privacy settings saved";
     }
 
     private async void ClipboardItem_Click(object sender, ItemClickEventArgs e)
     {
-        int index = ClipboardList.Items.IndexOf(e.ClickedItem);
-        if (index < 0 || index >= _clipboardItems.Count) return;
+        int index = ClipboardList.SelectedIndex;
+        if (index < 0 || index >= _visibleClipboardItems.Count) return;
         var package = new DataPackage();
-        package.SetText(_clipboardItems[index]);
+        package.SetText(_visibleClipboardItems[index]);
         Clipboard.SetContent(package);
         ClipboardStatusText.Text = "Copied selected history item";
         await Task.CompletedTask;
@@ -402,7 +553,9 @@ public sealed partial class MainWindow : Window
     private void ClearClipboardButton_Click(object sender, RoutedEventArgs e)
     {
         _clipboardItems.Clear();
-        SaveJsonList(_clipboardPath, _clipboardItems);
+        _pinnedClipboardItems.Clear();
+        _clipboardCapturedAt.Clear();
+        SaveClipboardData();
         RefreshClipboardList();
         ClipboardStatusText.Text = "Clipboard history cleared";
     }
@@ -539,6 +692,7 @@ public sealed partial class MainWindow : Window
 
     private void TrackForegroundApp()
     {
+        if (!_screenTimeEnabled) return;
         nint hwnd = GetForegroundWindow();
         if (hwnd == 0) return;
         _ = GetWindowThreadProcessId(hwnd, out uint processId);
@@ -548,11 +702,60 @@ public sealed partial class MainWindow : Window
             using var process = Process.GetProcessById((int)processId);
             string name = process.ProcessName;
             _foregroundSeconds[name] = _foregroundSeconds.GetValueOrDefault(name) + 1;
-            var top = _foregroundSeconds.OrderByDescending(p => p.Value).Take(4)
+            string today = DateTime.Today.ToString("yyyy-MM-dd");
+            _screenTimeData[today] = new Dictionary<string, int>(_foregroundSeconds, StringComparer.OrdinalIgnoreCase);
+            var top = _foregroundSeconds.OrderByDescending(p => p.Value).Take(6)
                 .Select(p => $"{p.Key} · {TimeSpan.FromSeconds(p.Value):hh\\:mm\\:ss}");
-            ScreenTimeText.Text = "This SAMY session only\n" + string.Join("\n", top);
+            ScreenTimeText.Text = $"Today · {today}\n" + string.Join("\n", top);
+            if ((DateTime.UtcNow - _lastScreenTimeSave).TotalSeconds >= 30) SaveScreenTime();
         }
         catch (Exception ex) when (ex is ArgumentException or InvalidOperationException or System.ComponentModel.Win32Exception) { }
+    }
+
+    private void LoadScreenTime()
+    {
+        try
+        {
+            if (File.Exists(_screenTimePath))
+            {
+                var saved = JsonSerializer.Deserialize<Dictionary<string, Dictionary<string, int>>>(File.ReadAllText(_screenTimePath));
+                if (saved is not null) foreach (var day in saved) _screenTimeData[day.Key] = day.Value;
+            }
+            string today = DateTime.Today.ToString("yyyy-MM-dd");
+            if (_screenTimeData.TryGetValue(today, out var entries))
+                foreach (var entry in entries) _foregroundSeconds[entry.Key] = entry.Value;
+            if (_screenTimeEnabled)
+                ScreenTimeText.Text = $"Today · {today}\n" + string.Join("\n", _foregroundSeconds.OrderByDescending(p => p.Value).Take(6).Select(p => $"{p.Key} · {TimeSpan.FromSeconds(p.Value):hh\\:mm\\:ss}"));
+        }
+        catch (Exception ex) when (ex is IOException or JsonException or UnauthorizedAccessException)
+        {
+            ScreenTimeText.Text = "Couldn't load local screen-time history.";
+        }
+    }
+
+    private void SaveScreenTime()
+    {
+        try
+        {
+            string today = DateTime.Today.ToString("yyyy-MM-dd");
+            _screenTimeData[today] = new Dictionary<string, int>(_foregroundSeconds, StringComparer.OrdinalIgnoreCase);
+            foreach (string oldDay in _screenTimeData.Keys.OrderByDescending(k => k).Skip(90).ToList()) _screenTimeData.Remove(oldDay);
+            File.WriteAllText(_screenTimePath, JsonSerializer.Serialize(_screenTimeData));
+            _lastScreenTimeSave = DateTime.UtcNow;
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            ScreenTimeText.Text = "Couldn't save local screen-time history.";
+        }
+    }
+
+    private void ScreenTimeToggle_Toggled(object sender, RoutedEventArgs e)
+    {
+        if (_loadingSettings) return;
+        _screenTimeEnabled = ScreenTimeToggle.IsOn;
+        if (_screenTimeEnabled) LoadScreenTime();
+        else ScreenTimeText.Text = "Tracking paused. Existing local reports are preserved.";
+        SaveSettings();
     }
 
     private void LoadToolData()
@@ -790,10 +993,34 @@ public sealed partial class MainWindow : Window
     private void MainWindow_Closed(object sender, WindowEventArgs args)
     {
         _uiTimer.Stop();
+        if (_screenTimeEnabled) SaveScreenTime();
         _clipboardTimer.Stop();
         _currentProcess.Dispose();
         SaveSettings();
     }
+
+    private static ulong FileTimeToUInt64(System.Runtime.InteropServices.ComTypes.FILETIME value)
+        => ((ulong)(uint)value.dwHighDateTime << 32) | (uint)value.dwLowDateTime;
+
+    [StructLayout(LayoutKind.Sequential)]
+    private struct MemoryStatusEx
+    {
+        public uint Length;
+        public uint MemoryLoad;
+        public ulong TotalPhysical;
+        public ulong AvailablePhysical;
+        public ulong TotalPageFile;
+        public ulong AvailablePageFile;
+        public ulong TotalVirtual;
+        public ulong AvailableVirtual;
+        public ulong AvailableExtendedVirtual;
+    }
+
+    [DllImport("kernel32.dll", SetLastError = true)]
+    private static extern bool GetSystemTimes(out System.Runtime.InteropServices.ComTypes.FILETIME idle, out System.Runtime.InteropServices.ComTypes.FILETIME kernel, out System.Runtime.InteropServices.ComTypes.FILETIME user);
+
+    [DllImport("kernel32.dll", SetLastError = true)]
+    private static extern bool GlobalMemoryStatusEx(ref MemoryStatusEx buffer);
 
     [DllImport("user32.dll")]
     private static extern nint GetForegroundWindow();
