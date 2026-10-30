@@ -2,210 +2,80 @@
     x:Class="Samy.MainWindow"
     xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-    xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
-    xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
-    mc:Ignorable="d"
     Title="SAMY">
-
-    <Grid Background="{StaticResource SamyBackgroundBrush}">
-        <Grid.RowDefinitions>
-            <RowDefinition Height="54"/>
-            <RowDefinition Height="*"/>
-        </Grid.RowDefinitions>
-
-        <!-- Compact top bar -->
-        <Grid Grid.Row="0" Margin="22,0">
-            <Grid.ColumnDefinitions>
-                <ColumnDefinition Width="*"/>
-                <ColumnDefinition Width="Auto"/>
-                <ColumnDefinition Width="*"/>
-            </Grid.ColumnDefinitions>
-            <StackPanel Orientation="Horizontal" VerticalAlignment="Center" Spacing="10">
-                <Border Width="26" Height="26" CornerRadius="9" Background="{StaticResource SamyAccentBrush}">
-                    <TextBlock Text="S" Foreground="#FF17121D" FontSize="16" FontWeight="Bold"
-                               HorizontalAlignment="Center" VerticalAlignment="Center"/>
-                </Border>
-                <TextBlock Text="SAMY" Foreground="{StaticResource SamyTextBrush}"
-                           FontSize="15" FontWeight="SemiBold" VerticalAlignment="Center"/>
-                <TextBlock Text="PREVIEW" Foreground="{StaticResource SamyMutedBrush}"
-                           FontSize="9" CharacterSpacing="150" VerticalAlignment="Center"/>
+    <Grid x:Name="Root" Background="#FF0B0D12" Padding="14">
+        <Grid.RowDefinitions><RowDefinition Height="52"/><RowDefinition Height="*"/></Grid.RowDefinitions>
+        <Grid x:Name="DragRegion" Grid.Row="0" ColumnSpacing="12">
+            <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+            <StackPanel Orientation="Horizontal" Spacing="10" VerticalAlignment="Center">
+                <Border Width="30" Height="30" CornerRadius="10" Background="#FFD7A5F4"><TextBlock Text="S" Foreground="#FF17121D" FontSize="18" FontWeight="Bold" HorizontalAlignment="Center" VerticalAlignment="Center"/></Border>
+                <TextBlock Text="SAMY" Foreground="#FFF6F3FA" FontSize="16" FontWeight="SemiBold" VerticalAlignment="Center"/>
+                <TextBlock x:Name="ClockText" Text="--:--" Foreground="#FF9A9EAD" VerticalAlignment="Center"/>
             </StackPanel>
-            <Border Grid.Column="1" Background="#FF050609" BorderBrush="#FF343846"
-                    BorderThickness="1" CornerRadius="0,0,18,18" Padding="22,7"
-                    MinWidth="180">
-                <StackPanel Orientation="Horizontal" Spacing="12" HorizontalAlignment="Center">
-                    <Ellipse Width="7" Height="7" Fill="{StaticResource SamyAccentBrush}"
-                             VerticalAlignment="Center"/>
-                    <TextBlock Text="SAMY  /  READY" Foreground="#FFF4EFF8"
-                               FontSize="10" FontWeight="SemiBold" CharacterSpacing="80"/>
-                </StackPanel>
-            </Border>
-            <TextBlock x:Name="ClockText" Grid.Column="2" Text="--:--"
-                       Foreground="{StaticResource SamyMutedBrush}" FontSize="13"
-                       HorizontalAlignment="Right" VerticalAlignment="Center"/>
+            <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="6">
+                <Button x:Name="PinButton" Content="PIN" Click="PinButton_Click" AutomationProperties.Name="Toggle always on top"/>
+                <Button Content="−" Click="CollapseButton_Click" AutomationProperties.Name="Collapse SAMY"/>
+                <Button Content="×" Click="CloseButton_Click" AutomationProperties.Name="Close SAMY"/>
+            </StackPanel>
         </Grid>
-
-        <Grid Grid.Row="1" Margin="18,8,18,18" ColumnSpacing="16">
-            <Grid.ColumnDefinitions>
-                <ColumnDefinition Width="190"/>
-                <ColumnDefinition Width="*"/>
-            </Grid.ColumnDefinitions>
-
-            <!-- Touch-friendly navigation -->
-            <Border Grid.Column="0" Background="{StaticResource SamySurfaceBrush}"
-                    CornerRadius="18" Padding="12">
+        <Grid x:Name="ExpandedContent" Grid.Row="1">
+            <Grid.ColumnDefinitions><ColumnDefinition Width="150"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+            <StackPanel Grid.Column="0" Spacing="6" Margin="0,8,12,0">
+                <Button Content="Home" Click="HomeNav_Click" MinHeight="44"/>
+                <Button Content="Clipboard" Click="ClipboardNav_Click" MinHeight="44"/>
+                <Button Content="File shelf" Click="FilesNav_Click" MinHeight="44"/>
+                <Button Content="Media" Click="MediaNav_Click" MinHeight="44"/>
+                <Button Content="Calendar" Click="CalendarNav_Click" MinHeight="44"/>
+                <Button Content="Settings" Click="SettingsNav_Click" MinHeight="44"/>
+                <TextBlock Text="LOCAL-FIRST · WINDOWS 11" Foreground="#FF777D8D" FontSize="9" TextWrapping="Wrap" Margin="4,14,0,0"/>
+            </StackPanel>
+            <ScrollViewer Grid.Column="1" VerticalScrollBarVisibility="Auto">
                 <Grid>
-                    <Grid.RowDefinitions>
-                        <RowDefinition Height="Auto"/>
-                        <RowDefinition Height="*"/>
-                        <RowDefinition Height="Auto"/>
-                    </Grid.RowDefinitions>
-                    <StackPanel Spacing="4">
-                        <TextBlock Text="WORKSPACE" Foreground="{StaticResource SamyMutedBrush}"
-                                   FontSize="10" CharacterSpacing="140" Margin="10,8,0,12"/>
-                        <Button Content="⌂   Home" HorizontalContentAlignment="Left"
-                                MinHeight="48" Background="#FF30263A" Foreground="{StaticResource SamyAccentBrush}"/>
-                        <Button Content="◷   Focus" HorizontalContentAlignment="Left"
-                                MinHeight="48" Background="Transparent" Foreground="{StaticResource SamyTextBrush}"/>
-                        <Button Content="▤   Notes" HorizontalContentAlignment="Left"
-                                MinHeight="48" Background="Transparent" Foreground="{StaticResource SamyTextBrush}"/>
-                        <Button Content="▣   File shelf" HorizontalContentAlignment="Left"
-                                MinHeight="48" Background="Transparent" Foreground="{StaticResource SamyTextBrush}"/>
-                        <Button Content="♫   Media" HorizontalContentAlignment="Left"
-                                MinHeight="48" Background="Transparent" Foreground="{StaticResource SamyTextBrush}"/>
+                    <StackPanel x:Name="HomePage" Spacing="14">
+                        <TextBlock Text="Your space, at a glance" Foreground="#FFF6F3FA" FontSize="26" FontWeight="SemiBold"/>
+                        <TextBlock Text="A small workspace that stays close when you need it." Foreground="#FF9A9EAD"/>
+                        <Grid ColumnSpacing="10">
+                            <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+                            <Border Background="#FF151923" CornerRadius="14" Padding="14"><StackPanel><TextBlock Text="FOCUS" Foreground="#FF9A9EAD" FontSize="10"/><TextBlock x:Name="FocusText" Text="25:00" FontSize="38" Foreground="#FFF6F3FA"/><StackPanel Orientation="Horizontal" Spacing="8"><Button x:Name="FocusButton" Content="Start" Click="FocusButton_Click"/><Button Content="Reset" Click="ResetFocusButton_Click"/></StackPanel></StackPanel></Border>
+                            <Border Grid.Column="1" Background="#FF151923" CornerRadius="14" Padding="14"><StackPanel><TextBlock Text="SYSTEM" Foreground="#FF9A9EAD" FontSize="10"/><TextBlock x:Name="CpuText" Text="—" FontSize="24" Foreground="#FFF6F3FA"/><TextBlock x:Name="MemoryText" Text="—" Foreground="#FF9A9EAD"/><TextBlock x:Name="DateText" Text="—" Foreground="#FF9A9EAD"/></StackPanel></Border>
+                        </Grid>
+                        <Border Background="#FF151923" CornerRadius="14" Padding="14"><StackPanel Spacing="8"><TextBlock Text="QUICK NOTE" Foreground="#FFD7A5F4" FontSize="10"/><TextBox x:Name="NoteBox" PlaceholderText="Write a note saved only on this PC..." AcceptsReturn="True" MinHeight="100" TextWrapping="Wrap"/><Button Content="Save note" Click="SaveNoteButton_Click" HorizontalAlignment="Right"/><TextBlock x:Name="NoteStatusText" Text="Stored locally" Foreground="#FF9A9EAD" FontSize="11"/></StackPanel></Border>
+                        <Border Background="#FF151923" CornerRadius="14" Padding="14"><StackPanel Spacing="6"><TextBlock Text="QUICK ACTIONS" Foreground="#FFD7A5F4" FontSize="10"/><StackPanel Orientation="Horizontal" Spacing="8"><Button Content="Add file" Click="AddFileButton_Click"/><Button Content="Open calendar" Click="OpenCalendarButton_Click"/><Button Content="Clipboard" Click="ClipboardNav_Click"/></StackPanel><TextBlock Text="Clipboard monitoring starts only when you enable it in Settings." Foreground="#FF9A9EAD" TextWrapping="Wrap" FontSize="11"/></StackPanel></Border>
                     </StackPanel>
-                    <StackPanel Grid.Row="2" Spacing="8">
-                        <Border Height="1" Background="#FF303543" Margin="4,0,4,8"/>
-                        <TextBlock Text="MADE TO STAY OUT OF THE WAY"
-                                   TextWrapping="Wrap" Foreground="{StaticResource SamyMutedBrush}"
-                                   FontSize="10" Margin="8,0,8,8"/>
+                    <StackPanel x:Name="ClipboardPage" Visibility="Collapsed" Spacing="12">
+                        <TextBlock Text="Clipboard history" FontSize="25" Foreground="#FFF6F3FA" FontWeight="SemiBold"/>
+                        <TextBlock Text="Text-only history stored on this device. Passwords and other sensitive text should not be copied while capture is enabled." Foreground="#FF9A9EAD" TextWrapping="Wrap"/>
+                        <StackPanel Orientation="Horizontal" Spacing="8"><Button Content="Copy latest" Click="CopyLatestButton_Click"/><Button Content="Clear history" Click="ClearClipboardButton_Click"/></StackPanel>
+                        <TextBlock x:Name="ClipboardStatusText" Text="Capture is off." Foreground="#FFD7A5F4"/>
+                        <ListView x:Name="ClipboardList" SelectionMode="Single" IsItemClickEnabled="True" ItemClick="ClipboardItem_Click" MaxHeight="480"/>
+                    </StackPanel>
+                    <StackPanel x:Name="FilesPage" Visibility="Collapsed" Spacing="12">
+                        <TextBlock Text="File shelf" FontSize="25" Foreground="#FFF6F3FA" FontWeight="SemiBold"/>
+                        <TextBlock Text="Pin files you choose. SAMY stores paths, not copies of your files." Foreground="#FF9A9EAD" TextWrapping="Wrap"/>
+                        <Button Content="Choose files" Click="AddFileButton_Click" HorizontalAlignment="Left"/>
+                        <ListView x:Name="FilesList" SelectionMode="Single" IsItemClickEnabled="True" ItemClick="FileItem_Click" MaxHeight="480"/>
+                        <Button Content="Remove selected" Click="RemoveFileButton_Click" HorizontalAlignment="Left"/>
+                    </StackPanel>
+                    <StackPanel x:Name="MediaPage" Visibility="Collapsed" Spacing="12">
+                        <TextBlock Text="Media controls" FontSize="25" Foreground="#FFF6F3FA" FontWeight="SemiBold"/>
+                        <Border Background="#FF151923" CornerRadius="14" Padding="16"><StackPanel Spacing="10"><TextBlock x:Name="MediaTitleText" Text="No active media session" FontSize="18" Foreground="#FFF6F3FA" TextWrapping="Wrap"/><TextBlock x:Name="MediaArtistText" Text="Start playing media in a supported Windows app." Foreground="#FF9A9EAD"/><StackPanel Orientation="Horizontal" Spacing="8"><Button Content="Previous" Click="PreviousMediaButton_Click"/><Button Content="Play / Pause" Click="PlayPauseMediaButton_Click"/><Button Content="Next" Click="NextMediaButton_Click"/></StackPanel><Button Content="Refresh session" Click="RefreshMediaButton_Click" HorizontalAlignment="Left"/></StackPanel></Border>
+                    </StackPanel>
+                    <StackPanel x:Name="CalendarPage" Visibility="Collapsed" Spacing="12">
+                        <TextBlock Text="Calendar" FontSize="25" Foreground="#FFF6F3FA" FontWeight="SemiBold"/>
+                        <Border Background="#FF151923" CornerRadius="14" Padding="16"><StackPanel Spacing="10"><TextBlock x:Name="CalendarDateText" FontSize="20" Foreground="#FFF6F3FA"/><CalendarView x:Name="CalendarControl" IsGroupLabelVisible="False" IsOutOfScopeEnabled="False"/><Button Content="Open Windows calendar" Click="OpenCalendarButton_Click" HorizontalAlignment="Left"/><TextBlock Text="SAMY shows a local date picker and opens your configured calendar app. Account calendar sync is not enabled." Foreground="#FF9A9EAD" TextWrapping="Wrap" FontSize="11"/></StackPanel></Border>
+                    </StackPanel>
+                    <StackPanel x:Name="SettingsPage" Visibility="Collapsed" Spacing="14">
+                        <TextBlock Text="Settings" FontSize="25" Foreground="#FFF6F3FA" FontWeight="SemiBold"/>
+                        <Border Background="#FF151923" CornerRadius="14" Padding="16"><StackPanel Spacing="12">
+                            <TextBlock Text="WINDOW BEHAVIOR" Foreground="#FFD7A5F4" FontSize="10"/>
+                            <ToggleSwitch x:Name="AlwaysOnTopToggle" Header="Keep SAMY always on top" Toggled="AlwaysOnTopToggle_Toggled"/>
+                            <ToggleSwitch x:Name="StartWithWindowsToggle" Header="Launch SAMY when I sign in" Toggled="StartWithWindowsToggle_Toggled"/>
+                            <ToggleSwitch x:Name="ClipboardToggle" Header="Enable local clipboard history (text only)" Toggled="ClipboardToggle_Toggled"/>
+                            <TextBlock Text="Clipboard capture is off by default. Turning it on stores copied text locally until you clear it or turn capture off." Foreground="#FF9A9EAD" TextWrapping="Wrap" FontSize="11"/>
+                        </StackPanel></Border>
+                        <Border Background="#FF151923" CornerRadius="14" Padding="16"><StackPanel Spacing="10"><TextBlock Text="PRIVACY & ACCESSIBILITY" Foreground="#FFD7A5F4" FontSize="10"/><Button Content="Clear clipboard history" Click="ClearClipboardButton_Click" HorizontalAlignment="Left"/><Button Content="Open local data folder" Click="OpenDataFolderButton_Click" HorizontalAlignment="Left"/><TextBlock Text="Controls have accessible names, visible labels, keyboard focus, and touch-friendly sizing. Notes, settings, and file paths remain on this PC." Foreground="#FF9A9EAD" TextWrapping="Wrap"/></StackPanel></Border>
                     </StackPanel>
                 </Grid>
-            </Border>
-
-            <!-- Dashboard -->
-            <ScrollViewer Grid.Column="1" VerticalScrollBarVisibility="Auto">
-                <StackPanel Spacing="18">
-                    <Grid>
-                        <StackPanel Spacing="5">
-                            <TextBlock Text="Your space, at a glance"
-                                       Foreground="{StaticResource SamyTextBrush}"
-                                       FontSize="27" FontWeight="SemiBold"/>
-                            <TextBlock Text="A calmer control centre for your Windows day."
-                                       Foreground="{StaticResource SamyMutedBrush}" FontSize="13"/>
-                        </StackPanel>
-                        <Border HorizontalAlignment="Right" VerticalAlignment="Center"
-                                Background="#FF202632" CornerRadius="20" Padding="13,8">
-                            <TextBlock Text="WINDOWS 11" Foreground="{StaticResource SamyAccentBrush}"
-                                       FontSize="10" FontWeight="SemiBold" CharacterSpacing="80"/>
-                        </Border>
-                    </Grid>
-
-                    <Grid ColumnSpacing="12">
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="*"/>
-                            <ColumnDefinition Width="*"/>
-                            <ColumnDefinition Width="*"/>
-                        </Grid.ColumnDefinitions>
-                        <Border Background="{StaticResource SamySurfaceBrush}" CornerRadius="16" Padding="16">
-                            <StackPanel Spacing="8">
-                                <TextBlock Text="PROCESSOR" Foreground="{StaticResource SamyMutedBrush}"
-                                           FontSize="10" CharacterSpacing="100"/>
-                                <TextBlock x:Name="CpuText" Text="—" Foreground="{StaticResource SamyTextBrush}"
-                                           FontSize="25" FontWeight="SemiBold"/>
-                                <TextBlock Text="SAMY process usage" Foreground="{StaticResource SamyMutedBrush}"
-                                           FontSize="10"/>
-                            </StackPanel>
-                        </Border>
-                        <Border Grid.Column="1" Background="{StaticResource SamySurfaceBrush}" CornerRadius="16" Padding="16">
-                            <StackPanel Spacing="8">
-                                <TextBlock Text="APP MEMORY" Foreground="{StaticResource SamyMutedBrush}"
-                                           FontSize="10" CharacterSpacing="100"/>
-                                <TextBlock x:Name="MemoryText" Text="—" Foreground="{StaticResource SamyTextBrush}"
-                                           FontSize="25" FontWeight="SemiBold"/>
-                                <TextBlock Text="Working set" Foreground="{StaticResource SamyMutedBrush}"
-                                           FontSize="10"/>
-                            </StackPanel>
-                        </Border>
-                        <Border Grid.Column="2" Background="{StaticResource SamySurfaceBrush}" CornerRadius="16" Padding="16">
-                            <StackPanel Spacing="8">
-                                <TextBlock Text="TODAY" Foreground="{StaticResource SamyMutedBrush}"
-                                           FontSize="10" CharacterSpacing="100"/>
-                                <TextBlock x:Name="DateText" Text="—" Foreground="{StaticResource SamyTextBrush}"
-                                           FontSize="21" FontWeight="SemiBold"/>
-                                <TextBlock Text="Local date" Foreground="{StaticResource SamyMutedBrush}"
-                                           FontSize="10"/>
-                            </StackPanel>
-                        </Border>
-                    </Grid>
-
-                    <Grid ColumnSpacing="12">
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="1.15*"/>
-                            <ColumnDefinition Width="*"/>
-                        </Grid.ColumnDefinitions>
-                        <Border Background="{StaticResource SamySurfaceBrush}" CornerRadius="18" Padding="20">
-                            <StackPanel Spacing="13">
-                                <Grid>
-                                    <TextBlock Text="FOCUS SESSION" Foreground="{StaticResource SamyMutedBrush}"
-                                               FontSize="10" CharacterSpacing="120"/>
-                                    <Border HorizontalAlignment="Right" Background="#FF2B2635"
-                                            CornerRadius="12" Padding="8,4">
-                                        <TextBlock Text="25 MIN" Foreground="{StaticResource SamyAccentBrush}"
-                                                   FontSize="9" FontWeight="SemiBold"/>
-                                    </Border>
-                                </Grid>
-                                <TextBlock x:Name="FocusText" Text="25:00" FontSize="42"
-                                           FontWeight="SemiBold" Foreground="{StaticResource SamyTextBrush}"/>
-                                <TextBlock x:Name="FocusStatusText" Text="A little progress adds up."
-                                           Foreground="{StaticResource SamyMutedBrush}" FontSize="12"/>
-                                <StackPanel Orientation="Horizontal" Spacing="9">
-                                    <Button x:Name="FocusButton" Content="Start focus" Click="FocusButton_Click"
-                                            MinHeight="44" Padding="18,0"
-                                            Background="{StaticResource SamyAccentBrush}" Foreground="#FF17121D"/>
-                                    <Button Content="Reset" Click="ResetFocusButton_Click"
-                                            MinHeight="44" Padding="18,0"/>
-                                </StackPanel>
-                            </StackPanel>
-                        </Border>
-                        <Border Grid.Column="1" Background="{StaticResource SamySurfaceBrush}"
-                                CornerRadius="18" Padding="20">
-                            <StackPanel Spacing="12">
-                                <TextBlock Text="QUICK NOTE" Foreground="{StaticResource SamyMutedBrush}"
-                                           FontSize="10" CharacterSpacing="120"/>
-                                <TextBlock Text="Keep a thought close." Foreground="{StaticResource SamyTextBrush}"
-                                           FontSize="18" FontWeight="SemiBold"/>
-                                <TextBox x:Name="NoteBox" MinHeight="100" AcceptsReturn="True"
-                                         TextWrapping="Wrap" PlaceholderText="Write a quick note..."
-                                         Background="#FF10141C" BorderBrush="#FF343A48"
-                                         Foreground="{StaticResource SamyTextBrush}"/>
-                                <Grid>
-                                    <TextBlock x:Name="NoteStatusText" Text="Saved on this device"
-                                               Foreground="{StaticResource SamyMutedBrush}"
-                                               FontSize="10" VerticalAlignment="Center"/>
-                                    <Button Content="Save note" Click="SaveNoteButton_Click"
-                                            HorizontalAlignment="Right" MinHeight="40"
-                                            Background="#FF30263A" Foreground="{StaticResource SamyAccentBrush}"/>
-                                </Grid>
-                            </StackPanel>
-                        </Border>
-                    </Grid>
-
-                    <Border Background="{StaticResource SamySurfaceBrush}" CornerRadius="18" Padding="20">
-                        <StackPanel Spacing="8">
-                            <TextBlock Text="COMING INTO FOCUS" Foreground="{StaticResource SamyMutedBrush}"
-                                       FontSize="10" CharacterSpacing="120"/>
-                            <TextBlock Text="Your tools, one small space." Foreground="{StaticResource SamyTextBrush}"
-                                       FontSize="18" FontWeight="SemiBold"/>
-                            <TextBlock Text="The first shell is in place. Clipboard history, file shelf, media sessions, calendar and the compact always-on-top mode will arrive as separate, testable features."
-                                       Foreground="{StaticResource SamyMutedBrush}" FontSize="12"
-                                       TextWrapping="Wrap" MaxWidth="760"/>
-                        </StackPanel>
-                    </Border>
-                    <TextBlock Text="SAMY PREVIEW  •  LOCAL-FIRST  •  WINDOWS 11"
-                               Foreground="#FF656B79" FontSize="9" CharacterSpacing="100"
-                               HorizontalAlignment="Center" Margin="0,4,0,8"/>
-                </StackPanel>
             </ScrollViewer>
         </Grid>
     </Grid>
