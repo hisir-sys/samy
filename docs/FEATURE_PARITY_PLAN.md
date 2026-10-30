@@ -20,14 +20,14 @@ The current app already has a WinUI 3 floating window, home view, a basic focus 
 | Links | Not implemented | Saved bookmarks, custom search shortcuts, quick open |
 | Weather | Not implemented | Optional location/city weather with clear network/privacy controls |
 | Units | Not implemented | Length, weight, temperature, data, volume, speed, time and currency conversion; currency requires current rates |
-| File Converter | Not implemented | Local image conversion (JPG/PNG/ICO) and PDF export where supported |
-| Calendar | Date picker and local reminders | Multiple local events, recurring reminders, calendar-feed subscription as an explicit opt-in |
+| File Converter | Image conversion (PNG/JPG/WEBP/BMP), image-to-PDF and PDF-page-to-PNG export | Add ICO export, batch conversion and large-file stress tests |
+| Calendar | Local reminders with daily/weekly/monthly recurrence and persisted HTTPS .ics feed subscriptions refreshed at launch and every 12 hours | Add full timezone/RDATE/EXDATE recurrence coverage and feed deletion/management UI |
 | Clock | Local clock only | Multiple configurable world clocks |
 | Screen Time | Opt-in local foreground-app duration summaries with daily JSON persistence and 90-day retention | Add report history UI and export; no keystroke, screenshot, or content capture |
-| System | Whole-device CPU and physical RAM sampling via Windows APIs | Add disk, network, battery and audio output status |
+| System | Whole-device CPU/RAM plus disk free space, network totals, battery and default audio endpoint volume/mute | Add live network throughput graphs and additional disk/adapter selection |
 | Message | Not implemented | User-authored status banner with colour and duration controls |
-| AI Coding | Not implemented | Optional local summaries from supported coding-tool usage logs; no API key or upload |
-| Analytics | Not implemented | Optional user-connected analytics providers; credentials protected and data fetched only on request |
+| AI Coding | Local Git activity report: last-30-day commits, active days, changed-file entries and file extensions; no source upload | Add opt-in IDE activity adapters only with explicit consent |
+| Analytics | User-configured HTTPS JSON endpoint, bearer-token test, Windows DPAPI CurrentUser token protection; actual HTTP status/JSON response verified | Add named provider adapters/OAuth and provider-specific metric schemas; no fabricated metrics |
 | Revenue | Not implemented | Optional user-connected sales providers; no credentials stored in plain text |
 
 ## Implementation order
@@ -90,6 +90,8 @@ The current feature branch adds a working Tools page with:
 
 Previously implemented modules remain available: floating workspace, local notes, clipboard history, file shelf, Windows media transport controls, local calendar reminders, settings/startup and basic SAMY process metrics.
 
-Not yet implemented to release quality: image/PDF file conversion, robust multi-note editor/checklist integration, clipboard search/pinning/individual deletion, multi-shelf drag/drop, recurring calendar events/feed subscriptions, whole-device system dashboard, persistent daily screen-time reports, coding-tool usage analytics, and authenticated analytics/revenue provider integrations. These require additional implementation and, for provider services, user-authorized credentials. Do not represent them as complete.
+Implemented in the current main branch: multiple named file shelves with drag-in, image format conversion, image-to-PDF and PDF-page-to-PNG export, recurring local reminders, persisted HTTPS .ics feed subscriptions, whole-device CPU/RAM/disk/network/battery/audio status, local Git coding activity summaries, and a generic authenticated HTTPS JSON API connection using a Windows DPAPI-protected bearer token. Reminder toasts use the Windows App SDK notification manager. The floating window positions itself relative to the monitor it currently occupies.
+
+Still requiring release validation or further work: drag files out of shelves; full iCalendar timezone and exception-rule support; provider-specific OAuth and analytics schemas; richer system graphs; notification activation/quiet-hours behavior; and physical Windows 11 tests for the notch, multi-monitor DPI/scaling, drag/drop, conversions, audio, and clean-install startup. CI success alone does not verify these desktop interactions.
 
 The current Windows build is under CI validation. No installer is considered verified until the latest commit's installer workflow succeeds and its artifact is inspected.
