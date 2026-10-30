@@ -1,52 +1,81 @@
 # SAMY for Windows
 
-A touch-friendly Windows productivity companion with a compact top-edge bar and an expandable dashboard.
+**SAMY** is an independent, local-first Windows productivity companion built with C# and WinUI 3. It brings quick tools into a compact floating workspace with an expandable dashboard.
 
 > SAMY is an independent implementation inspired by publicly visible productivity patterns. It does not include Vayli source code, proprietary assets, extracted binaries, or copied implementation details.
 
-## Product direction
+## Current release
 
-- Compact, draggable top bar with collapsed and expanded states
-- Touch-friendly dashboard with larger hit targets and responsive layouts
-- Home overview: system resource readings, focus timer, notes
-- Local clipboard history with explicit privacy controls
-- File shelf for user-selected files and folders
-- Media controls through supported Windows media-session APIs
-- Calendar view and configurable notifications
-- Settings for appearance, position, startup behavior, and privacy
+- **Version:** 0.2.0
+- **Platform:** Windows 11 x64
+- **Installer:** [SAMY-Setup.exe — latest release](https://github.com/hisir-sys/samy/releases/latest)
+- **Build:** Windows CI builds the app, publishes a self-contained x64 package, and creates the installer.
+
+## Screenshots
+
+Real screenshots of the running WinUI application are **not available in this repository yet**. This environment can inspect and build the source through Windows CI, but it cannot launch an interactive Windows desktop and capture genuine app screens. We will add screenshots from a real Windows 11 session rather than presenting mockups as product screenshots.
+
+Planned captures:
+- Floating notch, collapsed and expanded
+- Home dashboard
+- Tools page
+- Calendar and reminders
+- Settings and privacy controls
+
+## Features
+
+The current feature set includes:
+
+- Floating productivity workspace and expandable dashboard
+- Focus timer with presets, custom countdown, and stopwatch
+- Unit converters for length, weight, temperature, and data
+- Saved links with local persistence and URL validation
+- Persistent local checklist
+- World clocks for Kolkata, London, and New York
+- In-app message preview
+- Optional weather lookup using Open-Meteo
+- Optional currency conversion using Frankfurter
+- Local session app-usage sampling (foreground app name and time only)
+- Local clipboard, file shelf, media, notes, calendar/reminder, and settings surfaces
+
+Some integrations and deeper workflows remain in development. In particular, this is not a claim that every planned parity feature is complete: advanced clipboard management, file conversion, multi-shelf drag and drop, recurring calendar feeds, whole-device system analytics, persistent screen-time reporting, coding analytics, and authenticated revenue/analytics provider integrations remain future work. SAMY does not fabricate analytics or revenue data.
 
 ## Technology
 
-- C# and WinUI 3 with the Windows App SDK
+- C# / WinUI 3
 - .NET 10
-- Local-first storage; no account or cloud sync required for core features
+- Windows App SDK 1.8
+- Self-contained Windows x64 installer built with Inno Setup
+- Local-first storage for core features; no account or cloud sync is required
 
-## Development principles
+## Install
 
-1. Build an original interface and original code.
-2. Request only the Windows permissions needed for each feature.
-3. Keep clipboard and notes data local by default.
-4. Make monitoring features transparent and user-configurable.
-5. Add each feature behind a small service boundary so it can be tested independently.
-6. Verify builds and tests before describing a feature as working.
+1. Open the [latest SAMY release](https://github.com/hisir-sys/samy/releases/latest).
+2. Download **SAMY-Setup.exe**.
+3. Run the installer. It installs for the current user and adds a Start Menu shortcut.
+4. Optional Desktop and sign-in shortcuts can be selected during setup.
 
-## Milestones
+The installer is currently unsigned. Windows may show an unknown-publisher / SmartScreen warning. Only download it from this repository's official Releases page.
 
-- [x] M0 — Repository foundation and WinUI 3 app shell
-- [x] M2 — First touch-friendly dashboard layout
-- [x] M3 — Focus timer and local quick notes
-- [x] Windows x64 installer pipeline definition (build result pending)
-- [ ] M1 — Compact always-on-top bar and expand/collapse
-- [ ] M4 — Clipboard history with privacy controls
-- [ ] M5 — File shelf and Windows media-session integration
-- [ ] M6 — Calendar view, notifications, and optional startup launch
-- [ ] M7 — Accessibility, performance, and Windows-device validation
-
-## Build and installer
+## Build from source
 
 See [docs/BUILDING.md](docs/BUILDING.md) and [docs/INSTALLER.md](docs/INSTALLER.md).
 
-The Windows Actions workflow is configured to produce `SAMY-Setup.exe` as the `SAMY-Windows-Installer` artifact on pushes to the feature branch or main. It installs for the current user, creates a Start Menu shortcut, and offers optional Desktop and sign-in shortcuts. No installer is claimed to exist until CI succeeds.
+Quick build on Windows 11 with the .NET 10 SDK:
+
+```powershell
+dotnet restore .\src\Samy\Samy.csproj
+dotnet build .\src\Samy\Samy.csproj -c Release
+```
+
+## Development principles
+
+1. Keep the implementation original.
+2. Request only the Windows permissions needed for each feature.
+3. Keep personal notes and clipboard content local by default.
+4. Make monitoring transparent and user-configurable.
+5. Separate features behind testable service boundaries.
+6. Verify builds and real Windows behavior before calling a feature complete.
 
 ## License
 
