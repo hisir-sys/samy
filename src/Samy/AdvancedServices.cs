@@ -13,6 +13,9 @@ namespace Samy;
 
 internal static class AdvancedServices
 {
+    private static long _lastNetworkSent;
+    private static long _lastNetworkReceived;
+    private static DateTime _lastNetworkSample = DateTime.MinValue;
     public static async Task ConvertImageAsync(string source, string destination, string format, CancellationToken cancellationToken = default)
     {
         await Task.Run(() =>
@@ -112,6 +115,8 @@ internal static class AdvancedServices
         using var request = new HttpRequestMessage(HttpMethod.Get, uri);
         request.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", token);
         using var response = await client.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, cancellationToken);
+        if (response.Content.Headers.ContentLength is long length && length > 512 * 1024)
+            throw new InvalidOperationException("Provider response is larger than 512 KB; use a summary endpoint.");
         string body = await response.Content.ReadAsStringAsync(cancellationToken);
         string summary = "Response received";
         try
@@ -119,13 +124,22 @@ internal static class AdvancedServices
             using var json = System.Text.Json.JsonDocument.Parse(body);
             summary = json.RootElement.ValueKind switch
             {
-                System.Text.Json.JsonValueKind.Object => $"Valid JSON object · {json.RootElement.EnumerateObject().Count()} top-level fields",
+                System.Text.Json.JsonValueKind.Object => BuildProviderSummary(json.RootElement),
                 System.Text.Json.JsonValueKind.Array => $"Valid JSON array · {json.RootElement.GetArrayLength()} items",
                 _ => $"Valid JSON · {json.RootElement.ValueKind}"
             };
         }
         catch (System.Text.Json.JsonException) { summary = "Response is not JSON; raw response was not displayed."; }
         return new ProviderProbeResult((int)response.StatusCode, response.IsSuccessStatusCode, summary);
+    }
+
+    private static string BuildProviderSummary(System.Text.Json.JsonElement root)
+    {
+        var properties = root.EnumerateObject().ToList();
+        var numeric = properties.Where(p => p.Value.ValueKind is System.Text.Json.JsonValueKind.Number or System.Text.Json.JsonValueKind.True or System.Text.Json.JsonValueKind.False)
+            .Take(8).Select(p => $"{p.Name}={p.Value.GetRawText()}").ToList();
+        return $"Valid JSON object · {properties.Count} top-level fields" +
+            (numeric.Count > 0 ? " · " + string.Join(", ", numeric) : " · no top-level numeric/boolean metrics");
     }
 
     public static IReadOnlyList<SamyReminder> ParseCalendarFeed(string ics, string sourceUrl, DateTime from, int daysAhead = 90)
@@ -190,7 +204,13 @@ internal static class AdvancedServices
         try
         {
             var drive = new DriveInfo(Path.GetPathRoot(Environment.SystemDirectory)!);
-            if (drive.IsReady) parts.Add($"Disk free · {drive.AvailableFreeSpace / 1024d / 1024d / 1024d:0.0} GB of {drive.TotalSize / 1024d / 1024d / 1024d:0.0} GB");
+            if (drive.IsReady)
+            {
+                double freeGb = drive.AvailableFreeSpace / 1024d / 1024d / 1024d;
+                double totalGb = drive.TotalSize / 1024d / 1024d / 1024d;
+                double usedPercent = totalGb <= 0 ? 0 : 100d * (totalGb - freeGb) / totalGb;
+                parts.Add($"System disk · {usedPercent:0}% used · {freeGb:0.0} GB free of {totalGb:0.0} GB");
+            }
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException) { parts.Add("Disk · unavailable"); }
         try
@@ -202,7 +222,12 @@ internal static class AdvancedServices
                 sent += stats.BytesSent;
                 received += stats.BytesReceived;
             }
-            parts.Add($"Network totals · ↓ {received / 1024d / 1024d:0} MB  ↑ {sent / 1024d / 1024d:0} MB");
+            DateTime sampleNow = DateTime.UtcNow;
+            double elapsed = _lastNetworkSample == DateTime.MinValue ? 0 : (sampleNow - _lastNetworkSample).TotalSeconds;
+            double receiveRate = elapsed > 0 ? Math.Max(0, received - _lastNetworkReceived) / elapsed : 0;
+            double sendRate = elapsed > 0 ? Math.Max(0, sent - _lastNetworkSent) / elapsed : 0;
+            _lastNetworkReceived = received; _lastNetworkSent = sent; _lastNetworkSample = sampleNow;
+            parts.Add($"Network · ↓ {receiveRate / 1024d:0} KB/s  ↑ {sendRate / 1024d:0} KB/s · totals ↓ {received / 1024d / 1024d:0} MB / ↑ {sent / 1024d / 1024d:0} MB");
         }
         catch (Exception ex) when (ex is NetworkInformationException or InvalidOperationException) { parts.Add("Network · unavailable"); }
         try
