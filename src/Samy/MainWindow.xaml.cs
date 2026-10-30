@@ -42,6 +42,10 @@ public sealed partial class MainWindow : Window
     private readonly string _screenTimePath;
     private readonly string _shelvesPath;
     private readonly string _providerCredentialPath;
+    private readonly string _calendarFeedsPath;
+    private readonly List<string> _calendarFeedUrls = [];
+    private DateTime _lastCalendarFeedRefresh = DateTime.MinValue;
+    private bool _calendarFeedRefreshRunning;
     private readonly Dictionary<string, List<string>> _shelves = new(StringComparer.OrdinalIgnoreCase);
     private string _selectedShelf = "General";
     private DateTime _lastSystemExtrasRefresh = DateTime.MinValue;
@@ -100,6 +104,7 @@ public sealed partial class MainWindow : Window
         _screenTimePath = Path.Combine(_dataDirectory, "screen-time.json");
         _shelvesPath = Path.Combine(_dataDirectory, "file-shelves.json");
         _providerCredentialPath = Path.Combine(_dataDirectory, "analytics-provider.json");
+        _calendarFeedsPath = Path.Combine(_dataDirectory, "calendar-feeds.json");
 
         ConfigureWindow();
         _currentProcess = Process.GetCurrentProcess();
@@ -188,6 +193,7 @@ public sealed partial class MainWindow : Window
         LoadJsonList(_filesPath, _fileItems);
         LoadShelves();
         LoadReminders();
+        LoadCalendarFeeds();
         LoadToolData();
         LoadScreenTime();
         RefreshClipboardList();
@@ -195,6 +201,7 @@ public sealed partial class MainWindow : Window
         LoadSettings();
         LoadSavedProviderSettings();
         RegisterNativeNotifications();
+        _ = RefreshCalendarFeedsAsync();
         await RefreshMediaAsync();
     }
 
@@ -206,6 +213,7 @@ public sealed partial class MainWindow : Window
         UpdateWorldClocks();
         TrackForegroundApp();
         if ((DateTime.UtcNow - _lastSystemExtrasRefresh).TotalSeconds >= 10) RefreshSystemDetails();
+        if (_calendarFeedUrls.Count > 0 && !_calendarFeedRefreshRunning && (DateTime.UtcNow - _lastCalendarFeedRefresh).TotalHours >= 12) _ = RefreshCalendarFeedsAsync();
         if (_toolTimerRunning)
         {
             if (_stopwatchMode) _stopwatchSeconds++;
@@ -1103,28 +1111,69 @@ public sealed partial class MainWindow : Window
         }
     }
 
+    private void LoadCalendarFeeds()
+    {
+        try
+        {
+            if (File.Exists(_calendarFeedsPath))
+            {
+                var saved = JsonSerializer.Deserialize<List<string>>(File.ReadAllText(_calendarFeedsPath));
+                if (saved is not null) _calendarFeedUrls.AddRange(saved.Where(IsHttpsFeed).Distinct(StringComparer.OrdinalIgnoreCase));
+            }
+        }
+        catch (Exception ex) when (ex is IOException or JsonException or UnauthorizedAccessException) { }
+    }
+
+    private static bool IsHttpsFeed(string value)
+        => Uri.TryCreate(value, UriKind.Absolute, out var uri) && uri.Scheme == Uri.UriSchemeHttps;
+
+    private void SaveCalendarFeeds()
+    {
+        try { File.WriteAllText(_calendarFeedsPath, JsonSerializer.Serialize(_calendarFeedUrls)); }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { ReminderStatusText.Text = "Couldn't save calendar subscriptions."; }
+    }
+
     private async void SubscribeCalendarFeedButton_Click(object sender, RoutedEventArgs e)
     {
         string url = CalendarFeedUrlBox.Text.Trim();
-        if (!Uri.TryCreate(url, UriKind.Absolute, out var uri) || uri.Scheme != Uri.UriSchemeHttps)
-        { ReminderStatusText.Text = "Calendar feeds must use HTTPS."; return; }
+        if (!IsHttpsFeed(url)) { ReminderStatusText.Text = "Calendar feeds must use HTTPS."; return; }
+        if (!_calendarFeedUrls.Contains(url, StringComparer.OrdinalIgnoreCase))
+        {
+            _calendarFeedUrls.Add(url);
+            SaveCalendarFeeds();
+        }
+        await RefreshCalendarFeedsAsync();
+    }
+
+    private async Task RefreshCalendarFeedsAsync()
+    {
+        if (_calendarFeedRefreshRunning || _calendarFeedUrls.Count == 0) return;
+        _calendarFeedRefreshRunning = true;
+        int added = 0, failed = 0;
         try
         {
-            using var client = new HttpClient { Timeout = TimeSpan.FromSeconds(15) };
-            string ics = await client.GetStringAsync(uri);
-            if (ics.Length > 2_000_000) { ReminderStatusText.Text = "Calendar feed is larger than 2 MB."; return; }
-            var imported = AdvancedServices.ParseCalendarFeed(ics, uri.ToString(), DateTime.Now);
-            int added = 0;
-            foreach (var item in imported)
+            using var client = new HttpClient { Timeout = TimeSpan.FromSeconds(12) };
+            foreach (string url in _calendarFeedUrls.ToList())
             {
-                if (_reminders.Any(existing => existing.FeedSource == item.FeedSource && existing.Text == item.Text && existing.DueAt == item.DueAt)) continue;
-                _reminders.Add(item); added++;
+                try
+                {
+                    string ics = await client.GetStringAsync(url);
+                    if (ics.Length > 2_000_000) { failed++; continue; }
+                    var imported = AdvancedServices.ParseCalendarFeed(ics, url, DateTime.Now);
+                    foreach (var item in imported)
+                    {
+                        if (_reminders.Any(existing => existing.FeedSource == item.FeedSource && existing.Text == item.Text && existing.DueAt == item.DueAt)) continue;
+                        _reminders.Add(item); added++;
+                    }
+                }
+                catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException or IOException or InvalidOperationException)
+                { failed++; }
             }
-            SaveReminders(); RefreshRemindersList();
-            ReminderStatusText.Text = $"Feed refreshed · {added} new events imported for the next 90 days. Refresh again to update."; 
+            if (added > 0) { SaveReminders(); RefreshRemindersList(); }
+            _lastCalendarFeedRefresh = DateTime.UtcNow;
+            ReminderStatusText.Text = $"Calendar feeds refreshed · {added} new events · {failed} feed errors · {_calendarFeedUrls.Count} subscriptions saved.";
         }
-        catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException or IOException or InvalidOperationException)
-        { ReminderStatusText.Text = "Feed refresh failed · " + ex.Message; }
+        finally { _calendarFeedRefreshRunning = false; }
     }
 
     private async void OpenCalendarButton_Click(object sender, RoutedEventArgs e)
