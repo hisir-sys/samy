@@ -8,7 +8,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
   build:
@@ -46,7 +46,8 @@ jobs:
           $iscc = (Get-Command ISCC.exe -ErrorAction Stop).Source
           & $iscc installer/SAMY.iss
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-      - name: Upload installer
+          if (-not (Test-Path artifacts/SAMY-Setup.exe)) { throw "SAMY-Setup.exe was not created." }
+      - name: Upload installer artifact
         uses: actions/upload-artifact@v4
         with:
           name: SAMY-Windows-Installer
@@ -60,3 +61,13 @@ jobs:
           path: publish/win-x64/**
           if-no-files-found: error
           retention-days: 14
+      - name: Publish GitHub Release
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v0.2.0
+          target_commitish: ${{ github.sha }}
+          name: SAMY v0.2.0
+          generate_release_notes: true
+          fail_on_unmatched_files: true
+          files: artifacts/SAMY-Setup.exe
