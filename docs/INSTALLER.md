@@ -35,3 +35,12 @@ The installer is written to `artifacts\SAMY-Setup.exe`.
 - The app uses self-contained Windows App SDK deployment; the installer bundles the published application files.
 - The installer is not code-signed. Windows SmartScreen may show an unknown-publisher warning.
 - A successful CI build verifies compilation and packaging, not a full interactive Windows 11 usability test. Test installation, launch, shortcuts, app behavior, and uninstall on a Windows 11 device before broad distribution.
+
+
+## Runtime prerequisite and startup diagnostics
+
+The installer bundles and installs the Microsoft Visual C++ 2015–2022 x64 runtime before launching SAMY. This is required by native Windows App SDK components on clean Windows installations. If SAMY still cannot start, the app writes startup exceptions and window-configuration fallback details to:
+
+`%LOCALAPPDATA%\SAMY\startup-error.log`
+
+The recovery window is intended to remain visible when SAMY's normal window construction fails. Please include this log when reporting a launch failure; do not delete the SAMY data folder while troubleshooting.

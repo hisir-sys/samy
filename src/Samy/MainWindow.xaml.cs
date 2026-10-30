@@ -98,16 +98,30 @@ public sealed partial class MainWindow : Window
 
     private void ConfigureWindow()
     {
-        nint hwnd = WindowNative.GetWindowHandle(this);
-        WindowId id = Win32Interop.GetWindowIdFromWindow(hwnd);
-        _appWindow = AppWindow.GetFromWindowId(id);
-        ExtendsContentIntoTitleBar = true;
-        SetTitleBar(DragRegion);
-        _appWindow.TitleBar.ExtendsContentIntoTitleBar = true;
-        _appWindow.TitleBar.ButtonBackgroundColor = Windows.UI.Color.FromArgb(0, 0, 0, 0);
-        _appWindow.TitleBar.ButtonInactiveBackgroundColor = Windows.UI.Color.FromArgb(0, 0, 0, 0);
-        _appWindow.Resize(new Windows.Graphics.SizeInt32(ExpandedWidth, ExpandedHeight));
-        PositionWindow(ExpandedWidth, ExpandedHeight);
+        try
+        {
+            nint hwnd = WindowNative.GetWindowHandle(this);
+            WindowId id = Win32Interop.GetWindowIdFromWindow(hwnd);
+            _appWindow = AppWindow.GetFromWindowId(id);
+            ExtendsContentIntoTitleBar = true;
+            SetTitleBar(DragRegion);
+            _appWindow.TitleBar.ExtendsContentIntoTitleBar = true;
+            _appWindow.TitleBar.ButtonBackgroundColor = Windows.UI.Color.FromArgb(0, 0, 0, 0);
+            _appWindow.TitleBar.ButtonInactiveBackgroundColor = Windows.UI.Color.FromArgb(0, 0, 0, 0);
+            _appWindow.Resize(new Windows.Graphics.SizeInt32(ExpandedWidth, ExpandedHeight));
+            PositionWindow(ExpandedWidth, ExpandedHeight);
+        }
+        catch (Exception ex)
+        {
+            // A title-bar/window-manager API failure must not prevent the main workspace from appearing.
+            try
+            {
+                File.AppendAllText(
+                    Path.Combine(_dataDirectory, "startup-error.log"),
+                    $"[{DateTimeOffset.Now:O}] Window configuration fallback{Environment.NewLine}{ex}{Environment.NewLine}");
+            }
+            catch { }
+        }
     }
 
     private void PositionWindow(int width, int height)

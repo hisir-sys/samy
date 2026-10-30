@@ -21,14 +21,14 @@ ArchitecturesInstallIn64BitMode=x64
 PrivilegesRequired=lowest
 UninstallDisplayIcon={app}\{#AppExeName}
 SetupLogging=yes
-SetupIconFile=..\\src\\Samy\\Assets\\SamyLogo.ico
+SetupIconFile=..\src\Samy\Assets\SamyLogo.ico
 
 [Tasks]
 Name: "desktopicon"; Description: "Create a desktop shortcut"; GroupDescription: "Additional shortcuts:"; Flags: unchecked
 Name: "startup"; Description: "Launch SAMY when I sign in"; GroupDescription: "Windows startup:"; Flags: unchecked
 
 [Files]
-Source: "..\\dependencies\\VC_redist.x64.exe"; DestDir: "{tmp}"; Flags: deleteafterinstall
+Source: "..\dependencies\VC_redist.x64.exe"; DestDir: "{tmp}"; Flags: deleteafterinstall
 Source: "..\publish\win-x64\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
 
 [Icons]
@@ -43,10 +43,10 @@ var
   Installed: Cardinal;
 begin
   Result := RegQueryDWordValue(HKLM64,
-    'SOFTWARE\\Microsoft\\VisualStudio\\14.0\\VC\\Runtimes\\x64',
+    'SOFTWARE\Microsoft\VisualStudio\14.0\VC\Runtimes\x64',
     'Installed', Installed) and (Installed = 1);
 end;
 
 [Run]
-Filename: "{tmp}\\VC_redist.x64.exe"; Parameters: "/install /quiet /norestart"; StatusMsg: "Installing Microsoft Visual C++ runtime..."; Flags: runhidden waituntilterminated; Check: not IsVCRuntimeInstalled
+Filename: "{tmp}\VC_redist.x64.exe"; Parameters: "/install /quiet /norestart"; StatusMsg: "Installing Microsoft Visual C++ runtime..."; Flags: runhidden waituntilterminated; Check: not IsVCRuntimeInstalled
 Filename: "{app}\{#AppExeName}"; Description: "Launch SAMY"; Flags: postinstall nowait skipifsilent

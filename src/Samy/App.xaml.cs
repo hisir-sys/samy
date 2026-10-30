@@ -59,11 +59,17 @@ public partial class App : Application
                 Foreground = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 215, 165, 244))
             });
             panel.Children.Add(message);
-            panel.Children.Add(new Button
+            var openFolder = new Button
             {
                 Content = "Open diagnostic folder",
                 HorizontalAlignment = HorizontalAlignment.Left
-            });
+            };
+            openFolder.Click += (_, _) =>
+            {
+                try { System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(DataDirectory) { UseShellExecute = true }); }
+                catch { }
+            };
+            panel.Children.Add(openFolder);
             var root = new Grid
             {
                 Background = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 11, 13, 18)),

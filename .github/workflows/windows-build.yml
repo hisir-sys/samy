@@ -41,6 +41,8 @@ jobs:
           New-Item -ItemType Directory -Force dependencies | Out-Null
           Invoke-WebRequest -Uri https://aka.ms/vs/17/release/vc_redist.x64.exe -OutFile dependencies/VC_redist.x64.exe
           if ((Get-Item dependencies/VC_redist.x64.exe).Length -lt 5000000) { throw "VC++ runtime download looks incomplete." }
+          $signature = Get-AuthenticodeSignature dependencies/VC_redist.x64.exe
+          if ($signature.Status -ne "Valid") { throw "VC++ runtime signature validation failed: $($signature.Status)" }
       - name: Publish self-contained Windows x64 app
         run: dotnet publish src/Samy/Samy.csproj --configuration Release --runtime win-x64 --self-contained true -p:WindowsAppSDKSelfContained=true -p:PublishSingleFile=false --output publish/win-x64
       - name: Install Inno Setup
