@@ -37,10 +37,11 @@ The current feature set includes:
 - In-app message preview
 - Optional weather lookup using Open-Meteo
 - Optional currency conversion using Frankfurter
-- Local session app-usage sampling (foreground app name and time only)
+- Opt-in persistent daily screen-time reports (process names and foreground duration only; stored locally)
+- Whole-device CPU and RAM monitoring (not just SAMY's own process)
 - Local clipboard, file shelf, media, notes, calendar/reminder, and settings surfaces
 
-Some integrations and deeper workflows remain in development. In particular, this is not a claim that every planned parity feature is complete: advanced clipboard management, file conversion, multi-shelf drag and drop, recurring calendar feeds, whole-device system analytics, persistent screen-time reporting, coding analytics, and authenticated revenue/analytics provider integrations remain future work. SAMY does not fabricate analytics or revenue data.
+Some integrations and deeper workflows remain in development. In particular, this is not a claim that every planned parity feature is complete: file conversion, multi-shelf drag and drop, recurring calendar feeds, extended system metrics (disk, network, battery and audio), coding analytics, native Windows notification delivery, and authenticated revenue/analytics provider integrations remain future work. SAMY does not fabricate analytics or revenue data.
 
 ## Technology
 

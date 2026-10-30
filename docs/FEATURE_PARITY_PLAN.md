@@ -13,7 +13,7 @@ The current app already has a WinUI 3 floating window, home view, a basic focus 
 | Module | Current SAMY state | Expansion target |
 |---|---|---|
 | Home | Basic clock, focus, process metrics, quick note | Configurable cards, recent activity, next reminder, compact/expanded layouts |
-| Clipboard | Opt-in text-only history | Search, pin, delete individual items, richer previews, bounded retention, sensitive-content exclusions |
+| Clipboard | Opt-in text-only history | Search, pin, delete individual items, bounded retention and sensitive-content exclusions implemented; richer previews remain |
 | File shelf | Stores selected file paths | Drag-and-drop in/out, multiple shelves, copy/open/remove actions, clear storage controls |
 | Timers & Focus | 25-minute focus countdown | Pomodoro cycles, configurable focus/break lengths, standalone countdown, stopwatch, water reminders |
 | Notes | One quick note | Multiple notes, autosave, pinning, checklists |
@@ -23,8 +23,8 @@ The current app already has a WinUI 3 floating window, home view, a basic focus 
 | File Converter | Not implemented | Local image conversion (JPG/PNG/ICO) and PDF export where supported |
 | Calendar | Date picker and local reminders | Multiple local events, recurring reminders, calendar-feed subscription as an explicit opt-in |
 | Clock | Local clock only | Multiple configurable world clocks |
-| Screen Time | Not implemented | Opt-in local foreground-app duration summaries; no keystroke, screenshot, or content capture |
-| System | SAMY process CPU/RAM only | Whole-device CPU, memory, disk, network, battery and audio output status |
+| Screen Time | Opt-in local foreground-app duration summaries with daily JSON persistence and 90-day retention | Add report history UI and export; no keystroke, screenshot, or content capture |
+| System | Whole-device CPU and physical RAM sampling via Windows APIs | Add disk, network, battery and audio output status |
 | Message | Not implemented | User-authored status banner with colour and duration controls |
 | AI Coding | Not implemented | Optional local summaries from supported coding-tool usage logs; no API key or upload |
 | Analytics | Not implemented | Optional user-connected analytics providers; credentials protected and data fetched only on request |
