@@ -1,0 +1,21 @@
+<Application
+    x:Class="Samy.App"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+    <Application.Resources>
+        <ResourceDictionary>
+            <Color x:Key="SamyBackgroundColor">#FF0B0D12</Color>
+            <Color x:Key="SamySurfaceColor">#FF151923</Color>
+            <Color x:Key="SamySurfaceRaisedColor">#FF1D2230</Color>
+            <Color x:Key="SamyAccentColor">#FFD7A5F4</Color>
+            <Color x:Key="SamyTextColor">#FFF6F3FA</Color>
+            <Color x:Key="SamyMutedColor">#FF9A9EAD</Color>
+            <SolidColorBrush x:Key="SamyBackgroundBrush" Color="{StaticResource SamyBackgroundColor}"/>
+            <SolidColorBrush x:Key="SamySurfaceBrush" Color="{StaticResource SamySurfaceColor}"/>
+            <SolidColorBrush x:Key="SamySurfaceRaisedBrush" Color="{StaticResource SamySurfaceRaisedColor}"/>
+            <SolidColorBrush x:Key="SamyAccentBrush" Color="{StaticResource SamyAccentColor}"/>
+            <SolidColorBrush x:Key="SamyTextBrush" Color="{StaticResource SamyTextColor}"/>
+            <SolidColorBrush x:Key="SamyMutedBrush" Color="{StaticResource SamyMutedColor}"/>
+        </ResourceDictionary>
+    </Application.Resources>
+</Application>

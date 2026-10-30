@@ -1,0 +1,62 @@
+name: Windows build and installer
+
+on:
+  push:
+    branches: [main, "feat/**"]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+      - name: Set up .NET 10
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+      - name: Restore
+        run: dotnet restore src/Samy/Samy.csproj
+      - name: Build
+        run: dotnet build src/Samy/Samy.csproj --configuration Release --no-restore
+
+  installer:
+    if: github.event_name != 'pull_request'
+    runs-on: windows-latest
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+      - name: Set up .NET 10
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+      - name: Publish self-contained Windows x64 app
+        run: dotnet publish src/Samy/Samy.csproj --configuration Release --runtime win-x64 --self-contained true -p:WindowsAppSDKSelfContained=true -p:PublishSingleFile=false --output publish/win-x64
+      - name: Install Inno Setup
+        run: choco install innosetup --yes --no-progress
+      - name: Build SAMY Setup.exe
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force artifacts | Out-Null
+          $iscc = (Get-Command ISCC.exe -ErrorAction Stop).Source
+          & $iscc installer/SAMY.iss
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Upload installer
+        uses: actions/upload-artifact@v4
+        with:
+          name: SAMY-Windows-Installer
+          path: artifacts/SAMY-Setup.exe
+          if-no-files-found: error
+          retention-days: 30
+      - name: Upload portable publish folder
+        uses: actions/upload-artifact@v4
+        with:
+          name: SAMY-Windows-x64-Publish
+          path: publish/win-x64/**
+          if-no-files-found: error
+          retention-days: 14
