@@ -35,10 +35,10 @@ WinUI 3 is selected as the starting point because it provides native Windows con
 
 ## Planned milestones
 
-- [ ] M0 — Repository foundation, app shell, build instructions
-- [ ] M1 — SAMY visual identity, compact bar, expand/collapse interaction
-- [ ] M2 — Touch-friendly dashboard and navigation
-- [ ] M3 — Focus timer, notes, and local settings
+- [x] M0 — Repository foundation, WinUI 3 app shell, build instructions
+- [ ] M1 — SAMY visual identity, compact always-on-top bar, expand/collapse interaction
+- [x] M2 — First touch-friendly dashboard layout and navigation shell
+- [x] M3 — Focus timer and local quick notes (settings are still pending)
 - [ ] M4 — Clipboard history with privacy controls
 - [ ] M5 — File shelf and Windows media-session integration
 - [ ] M6 — Calendar view, notifications, and optional startup launch
@@ -46,7 +46,7 @@ WinUI 3 is selected as the starting point because it provides native Windows con
 
 ## Build status
 
-The repository has just been initialized. No runnable application or feature is claimed until its implementation and Windows build are verified.
+The first C# / WinUI 3 application shell is committed on `feat/winui3-foundation`. The dashboard includes a local clock, SAMY process CPU and working-set readings, a 25-minute focus timer, and a quick note stored under `%LOCALAPPDATA%\\SAMY`. The Windows build workflow is configured; the first Windows CI result is still pending. The compact always-on-top notch and remaining integrations are not implemented yet.
 
 ## License
 
