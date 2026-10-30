@@ -105,7 +105,8 @@ internal static class AdvancedServices
 
     public static async Task<ProviderProbeResult> ProbeProviderAsync(string endpoint, string token, CancellationToken cancellationToken = default)
     {
-        if (!Uri.TryCreate(endpoint, UriKind.Absolute, out var uri) || (uri.Scheme != Uri.UriSchemeHttps && !IPAddress.IsLoopback(uri.HostNameType == UriHostNameType.Dns ? Dns.GetHostAddresses(uri.DnsSafeHost).FirstOrDefault() ?? IPAddress.None : IPAddress.None)))
+        if (!Uri.TryCreate(endpoint, UriKind.Absolute, out var uri) ||
+            (uri.Scheme != Uri.UriSchemeHttps && !(uri.IsLoopback || uri.Host.Equals("localhost", StringComparison.OrdinalIgnoreCase))))
             throw new InvalidOperationException("Use an HTTPS API URL. HTTP is allowed only for localhost.");
         using var client = new HttpClient { Timeout = TimeSpan.FromSeconds(12) };
         using var request = new HttpRequestMessage(HttpMethod.Get, uri);
@@ -177,8 +178,10 @@ internal static class AdvancedServices
     private static bool TryParseIcsDate(string value, out DateTime date)
     {
         string[] formats = ["yyyyMMdd'T'HHmmss'Z'", "yyyyMMdd'T'HHmmss", "yyyyMMdd"];
-        if (DateTime.TryParseExact(value, formats, CultureInfo.InvariantCulture, DateTimeStyles.AssumeUniversal | DateTimeStyles.AdjustToLocal, out date)) return true;
-        return DateTime.TryParse(value, CultureInfo.InvariantCulture, DateTimeStyles.AssumeLocal, out date);
+        if (value.EndsWith("Z", StringComparison.OrdinalIgnoreCase) && DateTime.TryParseExact(value, formats, CultureInfo.InvariantCulture, DateTimeStyles.AssumeUniversal, out var utc))
+        { date = utc.ToLocalTime(); return true; }
+        return DateTime.TryParseExact(value, formats, CultureInfo.InvariantCulture, DateTimeStyles.AssumeLocal, out date)
+            || DateTime.TryParse(value, CultureInfo.InvariantCulture, DateTimeStyles.AssumeLocal, out date);
     }
 
     public static string GetSystemExtras()

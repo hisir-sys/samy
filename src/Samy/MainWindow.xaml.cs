@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using System.Security.Cryptography;
 using System.Runtime.InteropServices;
 using System.Text.Json;
 using Microsoft.UI;
