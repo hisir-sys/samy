@@ -30,6 +30,8 @@ public sealed partial class MainWindow : Window
     private readonly string _clipboardPath;
     private readonly string _filesPath;
     private readonly string _settingsPath;
+    private readonly string _remindersPath;
+    private readonly List<SamyReminder> _reminders = [];
     private readonly List<string> _clipboardItems = [];
     private readonly List<string> _fileItems = [];
     private TimeSpan _lastCpuTime;
@@ -56,6 +58,7 @@ public sealed partial class MainWindow : Window
         _clipboardPath = Path.Combine(_dataDirectory, "clipboard-history.json");
         _filesPath = Path.Combine(_dataDirectory, "file-shelf.json");
         _settingsPath = Path.Combine(_dataDirectory, "settings.json");
+        _remindersPath = Path.Combine(_dataDirectory, "reminders.json");
 
         ConfigureWindow();
         _currentProcess = Process.GetCurrentProcess();
@@ -106,6 +109,7 @@ public sealed partial class MainWindow : Window
         await LoadNoteAsync();
         LoadJsonList(_clipboardPath, _clipboardItems);
         LoadJsonList(_filesPath, _fileItems);
+        LoadReminders();
         RefreshClipboardList();
         RefreshFilesList();
         LoadSettings();
@@ -116,6 +120,7 @@ public sealed partial class MainWindow : Window
     {
         UpdateClock();
         RefreshMetrics();
+        CheckReminders();
         if (!_focusIsRunning) return;
         _focusSecondsRemaining = Math.Max(0, _focusSecondsRemaining - 1);
         UpdateFocusDisplay();
@@ -460,6 +465,85 @@ public sealed partial class MainWindow : Window
         if (_mediaSession is not null) await _mediaSession.TrySkipNextAsync();
     }
 
+
+    private void LoadReminders()
+    {
+        try
+        {
+            if (File.Exists(_remindersPath))
+            {
+                var loaded = JsonSerializer.Deserialize<List<SamyReminder>>(File.ReadAllText(_remindersPath));
+                if (loaded is not null) _reminders.AddRange(loaded);
+            }
+            RefreshRemindersList();
+        }
+        catch (Exception ex) when (ex is IOException or JsonException or UnauthorizedAccessException)
+        {
+            ReminderStatusText.Text = "Couldn't load local reminders";
+        }
+    }
+
+    private void SaveReminders()
+    {
+        try { File.WriteAllText(_remindersPath, JsonSerializer.Serialize(_reminders)); }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            ReminderStatusText.Text = "Couldn't save reminders";
+        }
+    }
+
+    private void RefreshRemindersList()
+    {
+        RemindersList.Items.Clear();
+        foreach (var reminder in _reminders.OrderBy(r => r.DueAt))
+        {
+            string status = reminder.Notified ? " · notified" : "";
+            RemindersList.Items.Add($"{reminder.DueAt:g}  ·  {reminder.Text}{status}");
+        }
+        if (_reminders.Count == 0) RemindersList.Items.Add("No reminders yet");
+    }
+
+    private void AddReminderButton_Click(object sender, RoutedEventArgs e)
+    {
+        string text = ReminderTextBox.Text.Trim();
+        if (string.IsNullOrWhiteSpace(text))
+        {
+            ReminderStatusText.Text = "Enter a reminder first";
+            return;
+        }
+        DateTime day = CalendarControl.SelectedDates.Count > 0
+            ? CalendarControl.SelectedDates[0].Date
+            : DateTime.Today;
+        DateTime due = day.Add(ReminderTimePicker.Time);
+        if (due <= DateTime.Now)
+        {
+            ReminderStatusText.Text = "Choose a future time for this reminder";
+            return;
+        }
+        _reminders.Add(new SamyReminder { Text = text, DueAt = due });
+        SaveReminders();
+        RefreshRemindersList();
+        ReminderTextBox.Text = "";
+        ReminderStatusText.Text = "Reminder saved on this PC";
+    }
+
+    private void CheckReminders()
+    {
+        bool changed = false;
+        foreach (var reminder in _reminders.Where(r => !r.Notified && r.DueAt <= DateTime.Now))
+        {
+            reminder.Notified = true;
+            NoteStatusText.Text = $"Reminder · {reminder.Text}";
+            ReminderStatusText.Text = $"Reminder due · {reminder.Text}";
+            changed = true;
+        }
+        if (changed)
+        {
+            SaveReminders();
+            RefreshRemindersList();
+        }
+    }
+
     private async void OpenCalendarButton_Click(object sender, RoutedEventArgs e)
     {
         try
@@ -511,4 +595,11 @@ public sealed partial class MainWindow : Window
 
     [DllImport("user32.dll")]
     private static extern uint GetClipboardSequenceNumber();
+}
+
+public sealed class SamyReminder
+{
+    public string Text { get; set; } = string.Empty;
+    public DateTime DueAt { get; set; }
+    public bool Notified { get; set; }
 }
