@@ -6,6 +6,7 @@ using Microsoft.UI.Dispatching;
 using Microsoft.UI.Windowing;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
+using Microsoft.Windows.AppNotifications;
 using Windows.ApplicationModel.DataTransfer;
 using Windows.Media.Control;
 using Windows.Storage.Pickers;
@@ -38,6 +39,12 @@ public sealed partial class MainWindow : Window
     private readonly string _linksPath;
     private readonly string _tasksPath;
     private readonly string _screenTimePath;
+    private readonly string _shelvesPath;
+    private readonly string _providerCredentialPath;
+    private readonly Dictionary<string, List<string>> _shelves = new(StringComparer.OrdinalIgnoreCase);
+    private string _selectedShelf = "General";
+    private DateTime _lastSystemExtrasRefresh = DateTime.MinValue;
+    private bool _notificationsRegistered;
     private readonly List<SamyLink> _savedLinks = [];
     private readonly List<SamyTask> _tasks = [];
     private static readonly HttpClient _http = new() { Timeout = TimeSpan.FromSeconds(8) };
@@ -90,6 +97,8 @@ public sealed partial class MainWindow : Window
         _linksPath = Path.Combine(_dataDirectory, "saved-links.json");
         _tasksPath = Path.Combine(_dataDirectory, "tasks.json");
         _screenTimePath = Path.Combine(_dataDirectory, "screen-time.json");
+        _shelvesPath = Path.Combine(_dataDirectory, "file-shelves.json");
+        _providerCredentialPath = Path.Combine(_dataDirectory, "analytics-provider.json");
 
         ConfigureWindow();
         _currentProcess = Process.GetCurrentProcess();
@@ -144,9 +153,17 @@ public sealed partial class MainWindow : Window
     private void PositionWindow(int width, int height)
     {
         nint hwnd = WindowNative.GetWindowHandle(this);
-        int screenWidth = GetSystemMetrics(0);
-        int x = Math.Max(0, (screenWidth - width) / 2);
-        SetWindowPos(hwnd, _alwaysOnTop ? HwndTopmost : HwndNotTopmost, x, 12, width, height, SwpNoActivate | SwpShowWindow);
+        var info = new MonitorInfo { Size = Marshal.SizeOf<MonitorInfo>() };
+        nint monitor = MonitorFromWindow(hwnd, 2);
+        int x, y;
+        if (monitor != 0 && GetMonitorInfo(monitor, ref info))
+        {
+            int workWidth = info.Work.Right - info.Work.Left;
+            x = info.Work.Left + Math.Max(0, (workWidth - width) / 2);
+            y = info.Work.Top + 12;
+        }
+        else { x = Math.Max(0, (GetSystemMetrics(0) - width) / 2); y = 12; }
+        SetWindowPos(hwnd, _alwaysOnTop ? HwndTopmost : HwndNotTopmost, x, y, width, height, SwpNoActivate | SwpShowWindow);
     }
 
     private async Task InitializeAsync()
@@ -168,12 +185,15 @@ public sealed partial class MainWindow : Window
         foreach (string item in _clipboardItems) if (!_clipboardCapturedAt.ContainsKey(item)) _clipboardCapturedAt[item] = DateTime.Now;
         ApplyClipboardRetention();
         LoadJsonList(_filesPath, _fileItems);
+        LoadShelves();
         LoadReminders();
         LoadToolData();
         LoadScreenTime();
         RefreshClipboardList();
         RefreshFilesList();
         LoadSettings();
+        LoadSavedProviderSettings();
+        RegisterNativeNotifications();
         await RefreshMediaAsync();
     }
 
@@ -184,6 +204,7 @@ public sealed partial class MainWindow : Window
         CheckReminders();
         UpdateWorldClocks();
         TrackForegroundApp();
+        if ((DateTime.UtcNow - _lastSystemExtrasRefresh).TotalSeconds >= 10) RefreshSystemDetails();
         if (_toolTimerRunning)
         {
             if (_stopwatchMode) _stopwatchSeconds++;
@@ -300,6 +321,7 @@ public sealed partial class MainWindow : Window
         CalendarPage.Visibility = Visibility.Collapsed;
         SettingsPage.Visibility = Visibility.Collapsed;
         ToolsPage.Visibility = Visibility.Collapsed;
+        InsightsPage.Visibility = Visibility.Collapsed;
         page.Visibility = Visibility.Visible;
     }
 
@@ -309,6 +331,7 @@ public sealed partial class MainWindow : Window
     private void MediaNav_Click(object sender, RoutedEventArgs e) => ShowPage(MediaPage);
     private void CalendarNav_Click(object sender, RoutedEventArgs e) => ShowPage(CalendarPage);
     private void SettingsNav_Click(object sender, RoutedEventArgs e) => ShowPage(SettingsPage);
+    private void InsightsNav_Click(object sender, RoutedEventArgs e) { ShowPage(InsightsPage); RefreshSystemDetails(); }
     private void ToolsNav_Click(object sender, RoutedEventArgs e) { ShowPage(ToolsPage); RefreshToolLists(); UpdateWorldClocks(); UpdateToolTimerDisplay(); }
 
     private void CollapseButton_Click(object sender, RoutedEventArgs e)
@@ -568,14 +591,129 @@ public sealed partial class MainWindow : Window
         IReadOnlyList<Windows.Storage.StorageFile> files = await picker.PickMultipleFilesAsync();
         foreach (var file in files)
             if (!_fileItems.Contains(file.Path, StringComparer.OrdinalIgnoreCase)) _fileItems.Add(file.Path);
-        SaveJsonList(_filesPath, _fileItems);
+        SaveShelves();
         RefreshFilesList();
     }
 
     private void RefreshFilesList()
     {
         FilesList.Items.Clear();
-        foreach (string path in _fileItems) FilesList.Items.Add(Path.GetFileName(path));
+        foreach (string path in _fileItems) FilesList.Items.Add(File.Exists(path) ? Path.GetFileName(path) : $"{Path.GetFileName(path)} · missing");
+    }
+
+    private void LoadShelves()
+    {
+        try
+        {
+            if (File.Exists(_shelvesPath))
+            {
+                var saved = JsonSerializer.Deserialize<Dictionary<string, List<string>>>(File.ReadAllText(_shelvesPath));
+                if (saved is not null) foreach (var shelf in saved) _shelves[shelf.Key] = shelf.Value;
+            }
+        }
+        catch (Exception ex) when (ex is IOException or JsonException or UnauthorizedAccessException) { }
+        if (_shelves.Count == 0) _shelves["General"] = new List<string>(_fileItems);
+        _selectedShelf = _shelves.Keys.First();
+        _fileItems.Clear();
+        _fileItems.AddRange(_shelves[_selectedShelf]);
+        ShelfPicker.Items.Clear();
+        foreach (string name in _shelves.Keys.OrderBy(k => k)) ShelfPicker.Items.Add(name);
+        ShelfPicker.SelectedItem = _selectedShelf;
+        RefreshFilesList();
+        SaveShelves();
+    }
+
+    private void SaveShelves()
+    {
+        _shelves[_selectedShelf] = new List<string>(_fileItems);
+        try { File.WriteAllText(_shelvesPath, JsonSerializer.Serialize(_shelves)); }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { ConversionStatusText.Text = "Couldn't save file shelves."; }
+        SaveJsonList(_filesPath, _fileItems);
+    }
+
+    private void ShelfPicker_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (ShelfPicker.SelectedItem is not string selected || !_shelves.ContainsKey(selected) || selected == _selectedShelf) return;
+        _shelves[_selectedShelf] = new List<string>(_fileItems);
+        _selectedShelf = selected;
+        _fileItems.Clear();
+        _fileItems.AddRange(_shelves[selected]);
+        RefreshFilesList();
+        SaveShelves();
+    }
+
+    private void AddShelfButton_Click(object sender, RoutedEventArgs e)
+    {
+        string name = NewShelfNameBox.Text.Trim();
+        if (name.Length is 0 or > 40 || name.IndexOfAny(Path.GetInvalidFileNameChars()) >= 0) { ConversionStatusText.Text = "Enter a valid shelf name (1–40 characters)."; return; }
+        if (_shelves.ContainsKey(name)) { ConversionStatusText.Text = "That shelf already exists."; return; }
+        _shelves[_selectedShelf] = new List<string>(_fileItems);
+        _shelves[name] = [];
+        _selectedShelf = name;
+        _fileItems.Clear();
+        ShelfPicker.Items.Add(name);
+        ShelfPicker.SelectedItem = name;
+        RefreshFilesList();
+        NewShelfNameBox.Text = "";
+        SaveShelves();
+    }
+
+    private void FileDropZone_DragOver(object sender, DragEventArgs e)
+    {
+        e.AcceptedOperation = DataPackageOperation.Copy;
+    }
+
+    private async void FileDropZone_Drop(object sender, DragEventArgs e)
+    {
+        try
+        {
+            if (!e.DataView.Contains(StandardDataFormats.StorageItems)) return;
+            var items = await e.DataView.GetStorageItemsAsync();
+            foreach (var item in items.OfType<Windows.Storage.StorageFile>())
+                if (!_fileItems.Contains(item.Path, StringComparer.OrdinalIgnoreCase)) _fileItems.Add(item.Path);
+            SaveShelves();
+            RefreshFilesList();
+            ConversionStatusText.Text = $"Added files to shelf · {_selectedShelf}";
+        }
+        catch (Exception ex) when (ex is COMException or InvalidOperationException or UnauthorizedAccessException)
+        {
+            ConversionStatusText.Text = "Windows couldn't read the dropped files.";
+        }
+    }
+
+    private void OpenSelectedFileButton_Click(object sender, RoutedEventArgs e)
+    {
+        int index = FilesList.SelectedIndex;
+        if (index >= 0 && index < _fileItems.Count && File.Exists(_fileItems[index]))
+            Process.Start(new ProcessStartInfo(_fileItems[index]) { UseShellExecute = true });
+        else ConversionStatusText.Text = "Select an available file first.";
+    }
+
+    private async void ConvertImageButton_Click(object sender, RoutedEventArgs e)
+    {
+        try
+        {
+            var open = new FileOpenPicker();
+            foreach (string extension in new[] { ".png", ".jpg", ".jpeg", ".bmp", ".webp", ".gif" }) open.FileTypeFilter.Add(extension);
+            InitializeWithWindow.Initialize(open, WindowNative.GetWindowHandle(this));
+            var source = await open.PickSingleFileAsync();
+            if (source is null) return;
+            string format = (ImageFormatBox.SelectedItem as ComboBoxItem)?.Content?.ToString() ?? "PNG";
+            string extensionOut = format == "JPG" ? ".jpg" : "." + format.ToLowerInvariant();
+            var save = new FileSavePicker();
+            save.FileTypeChoices.Add(format, new List<string> { extensionOut });
+            save.SuggestedFileName = Path.GetFileNameWithoutExtension(source.Name) + "-converted";
+            InitializeWithWindow.Initialize(save, WindowNative.GetWindowHandle(this));
+            var destination = await save.PickSaveFileAsync();
+            if (destination is null) return;
+            ConversionStatusText.Text = "Converting…";
+            await AdvancedServices.ConvertImageAsync(source.Path, destination.Path, format);
+            ConversionStatusText.Text = $"Saved {format} · {destination.Path}";
+        }
+        catch (Exception ex) when (ex is IOException or InvalidDataException or UnauthorizedAccessException or InvalidOperationException or COMException)
+        {
+            ConversionStatusText.Text = "Conversion failed · " + ex.Message;
+        }
     }
 
     private void FileItem_Click(object sender, ItemClickEventArgs e)
@@ -600,7 +738,7 @@ public sealed partial class MainWindow : Window
         int index = FilesList.SelectedIndex;
         if (index < 0 || index >= _fileItems.Count) return;
         _fileItems.RemoveAt(index);
-        SaveJsonList(_filesPath, _fileItems);
+        SaveShelves();
         RefreshFilesList();
     }
 
@@ -931,7 +1069,8 @@ public sealed partial class MainWindow : Window
             ReminderStatusText.Text = "Choose a future time for this reminder";
             return;
         }
-        _reminders.Add(new SamyReminder { Text = text, DueAt = due });
+        string recurrence = (ReminderRecurrenceBox.SelectedItem as ComboBoxItem)?.Tag?.ToString() ?? "ONCE";
+        _reminders.Add(new SamyReminder { Text = text, DueAt = due, Recurrence = recurrence });
         SaveReminders();
         RefreshRemindersList();
         ReminderTextBox.Text = "";
@@ -941,11 +1080,19 @@ public sealed partial class MainWindow : Window
     private void CheckReminders()
     {
         bool changed = false;
-        foreach (var reminder in _reminders.Where(r => !r.Notified && r.DueAt <= DateTime.Now))
+        foreach (var reminder in _reminders.Where(r => !r.Notified && r.DueAt <= DateTime.Now).ToList())
         {
-            reminder.Notified = true;
+            ShowNativeNotification("SAMY reminder", reminder.Text);
             NoteStatusText.Text = $"Reminder · {reminder.Text}";
             ReminderStatusText.Text = $"Reminder due · {reminder.Text}";
+            if (reminder.Recurrence is "DAILY" or "WEEKLY" or "MONTHLY")
+            {
+                DateTime next = reminder.DueAt;
+                do { next = reminder.Recurrence switch { "DAILY" => next.AddDays(1), "WEEKLY" => next.AddDays(7), _ => next.AddMonths(1) }; } while (next <= DateTime.Now);
+                reminder.DueAt = next;
+                reminder.Notified = false;
+            }
+            else reminder.Notified = true;
             changed = true;
         }
         if (changed)
@@ -953,6 +1100,30 @@ public sealed partial class MainWindow : Window
             SaveReminders();
             RefreshRemindersList();
         }
+    }
+
+    private async void SubscribeCalendarFeedButton_Click(object sender, RoutedEventArgs e)
+    {
+        string url = CalendarFeedUrlBox.Text.Trim();
+        if (!Uri.TryCreate(url, UriKind.Absolute, out var uri) || uri.Scheme != Uri.UriSchemeHttps)
+        { ReminderStatusText.Text = "Calendar feeds must use HTTPS."; return; }
+        try
+        {
+            using var client = new HttpClient { Timeout = TimeSpan.FromSeconds(15) };
+            string ics = await client.GetStringAsync(uri);
+            if (ics.Length > 2_000_000) { ReminderStatusText.Text = "Calendar feed is larger than 2 MB."; return; }
+            var imported = AdvancedServices.ParseCalendarFeed(ics, uri.ToString(), DateTime.Now);
+            int added = 0;
+            foreach (var item in imported)
+            {
+                if (_reminders.Any(existing => existing.FeedSource == item.FeedSource && existing.Text == item.Text && existing.DueAt == item.DueAt)) continue;
+                _reminders.Add(item); added++;
+            }
+            SaveReminders(); RefreshRemindersList();
+            ReminderStatusText.Text = $"Feed refreshed · {added} new events imported for the next 90 days. Refresh again to update."; 
+        }
+        catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException or IOException or InvalidOperationException)
+        { ReminderStatusText.Text = "Feed refresh failed · " + ex.Message; }
     }
 
     private async void OpenCalendarButton_Click(object sender, RoutedEventArgs e)
@@ -965,6 +1136,94 @@ public sealed partial class MainWindow : Window
         {
             NoteStatusText.Text = "No calendar app is registered on this PC";
         }
+    }
+
+    private void RefreshSystemDetailsButton_Click(object sender, RoutedEventArgs e) => RefreshSystemDetails();
+
+    private void RefreshSystemDetails()
+    {
+        SystemExtrasText.Text = AdvancedServices.GetSystemExtras();
+        _lastSystemExtrasRefresh = DateTime.UtcNow;
+    }
+
+    private async void ChooseCodingRepoButton_Click(object sender, RoutedEventArgs e)
+    {
+        var picker = new FolderPicker();
+        picker.FileTypeFilter.Add("*");
+        InitializeWithWindow.Initialize(picker, WindowNative.GetWindowHandle(this));
+        var folder = await picker.PickSingleFolderAsync();
+        if (folder is not null) CodingRepoPathBox.Text = folder.Path;
+    }
+
+    private async void AnalyzeCodingButton_Click(object sender, RoutedEventArgs e)
+    {
+        string folder = CodingRepoPathBox.Text.Trim();
+        if (folder.Length == 0) { CodingReportText.Text = "Choose a local Git repository first."; return; }
+        CodingReportText.Text = "Analyzing local Git history…";
+        try
+        {
+            var report = await Task.Run(() => AdvancedServices.AnalyzeGitRepository(folder));
+            CodingReportText.Text = $"Last 30 days\nCommits · {report.CommitsLast30Days}\nActive days · {report.ActiveDays}\nChanged-file entries · {report.ChangedFileEntries}\nFile types · {(report.TopFileTypes.Count == 0 ? "No file extensions in the selected history" : string.Join(", ", report.TopFileTypes))}\nLocal repository · {report.Repository}";
+        }
+        catch (Exception ex) when (ex is InvalidOperationException or IOException or TimeoutException or UnauthorizedAccessException)
+        { CodingReportText.Text = "Analysis unavailable · " + ex.Message; }
+    }
+
+    private void LoadSavedProviderSettings()
+    {
+        try
+        {
+            if (!File.Exists(_providerCredentialPath)) return;
+            using var doc = JsonDocument.Parse(File.ReadAllText(_providerCredentialPath));
+            ProviderEndpointBox.Text = doc.RootElement.GetProperty("endpoint").GetString() ?? "";
+            ProviderStatusText.Text = "Encrypted token saved for this Windows account. Press Test to verify the live provider again.";
+        }
+        catch (Exception ex) when (ex is IOException or JsonException or UnauthorizedAccessException) { ProviderStatusText.Text = "Saved provider settings could not be read."; }
+    }
+
+    private async void ConnectProviderButton_Click(object sender, RoutedEventArgs e)
+    {
+        string endpoint = ProviderEndpointBox.Text.Trim();
+        string token = ProviderTokenBox.Password;
+        if (token.Length == 0)
+        {
+            try
+            {
+                using var saved = JsonDocument.Parse(File.ReadAllText(_providerCredentialPath));
+                token = AdvancedServices.UnprotectToken(saved.RootElement.GetProperty("protectedToken").GetString() ?? "");
+            }
+            catch { ProviderStatusText.Text = "Enter the provider's bearer token."; return; }
+        }
+        ProviderStatusText.Text = "Checking the real provider endpoint…";
+        try
+        {
+            var result = await AdvancedServices.ProbeProviderAsync(endpoint, token);
+            if (!result.Success) { ProviderStatusText.Text = $"Provider returned HTTP {result.StatusCode}. Token was not saved."; return; }
+            string protectedToken = AdvancedServices.ProtectToken(token);
+            File.WriteAllText(_providerCredentialPath, JsonSerializer.Serialize(new { endpoint, protectedToken }));
+            ProviderTokenBox.Password = "";
+            ProviderStatusText.Text = $"Connected · HTTP {result.StatusCode} · {result.Summary}. No metrics are inferred; this endpoint's response was verified."; 
+        }
+        catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException or InvalidOperationException or IOException or CryptographicException or UnauthorizedAccessException)
+        { ProviderStatusText.Text = "Connection failed · " + ex.Message; }
+    }
+
+    private void RegisterNativeNotifications()
+    {
+        try { AppNotificationManager.Default.Register(); _notificationsRegistered = true; }
+        catch (Exception ex) { _notificationsRegistered = false; ProviderStatusText.Text = "Windows notifications could not be registered: " + ex.Message; }
+    }
+
+    private void ShowNativeNotification(string title, string body)
+    {
+        try
+        {
+            if (!_notificationsRegistered) RegisterNativeNotifications();
+            string safeTitle = System.Security.SecurityElement.Escape(title) ?? "SAMY";
+            string safeBody = System.Security.SecurityElement.Escape(body) ?? "";
+            AppNotificationManager.Default.Show(new AppNotification($"<toast><visual><binding template='ToastGeneric'><text>{safeTitle}</text><text>{safeBody}</text></binding></visual></toast>"));
+        }
+        catch (Exception ex) { ReminderStatusText.Text = "In-app reminder shown; Windows notification unavailable."; }
     }
 
     private void OpenDataFolderButton_Click(object sender, RoutedEventArgs e)
@@ -1031,6 +1290,14 @@ public sealed partial class MainWindow : Window
     [DllImport("user32.dll")]
     private static extern bool SetWindowPos(nint hWnd, int hWndInsertAfter, int x, int y, int cx, int cy, uint uFlags);
 
+    [StructLayout(LayoutKind.Sequential)]
+    private struct NativeRect { public int Left, Top, Right, Bottom; }
+    [StructLayout(LayoutKind.Sequential)]
+    private struct MonitorInfo { public int Size; public NativeRect Monitor; public NativeRect Work; public uint Flags; }
+    [DllImport("user32.dll")]
+    private static extern nint MonitorFromWindow(nint hwnd, uint flags);
+    [DllImport("user32.dll", CharSet = CharSet.Auto)]
+    private static extern bool GetMonitorInfo(nint monitor, ref MonitorInfo info);
     [DllImport("user32.dll")]
     private static extern int GetSystemMetrics(int nIndex);
 
@@ -1043,6 +1310,8 @@ public sealed class SamyReminder
     public string Text { get; set; } = string.Empty;
     public DateTime DueAt { get; set; }
     public bool Notified { get; set; }
+    public string Recurrence { get; set; } = "ONCE";
+    public string FeedSource { get; set; } = "";
 }
 
 
