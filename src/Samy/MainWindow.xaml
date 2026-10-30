@@ -34,6 +34,7 @@
                 <Button Content="Media" Click="MediaNav_Click" MinHeight="44"/>
                 <Button Content="Calendar" Click="CalendarNav_Click" MinHeight="44"/>
                 <Button Content="Tools" Click="ToolsNav_Click" MinHeight="44"/>
+                <Button Content="Insights" Click="InsightsNav_Click" MinHeight="44"/>
                 <Button Content="Settings" Click="SettingsNav_Click" MinHeight="44"/>
                 <TextBlock Text="LOCAL-FIRST · WINDOWS 11" Foreground="#FF777D8D" FontSize="9" TextWrapping="Wrap" Margin="4,14,0,0"/>
             </StackPanel>
@@ -65,10 +66,13 @@
                     </StackPanel>
                     <StackPanel x:Name="FilesPage" Visibility="Collapsed" Spacing="12">
                         <TextBlock Text="File shelf" FontSize="25" Foreground="#FFF6F3FA" FontWeight="SemiBold"/>
-                        <TextBlock Text="Pin files you choose. SAMY stores paths, not copies of your files." Foreground="#FF9A9EAD" TextWrapping="Wrap"/>
+                        <TextBlock Text="Pin files you choose. SAMY stores paths, not copies of your files. Use shelves to organise projects." Foreground="#FF9A9EAD" TextWrapping="Wrap"/>
+                        <StackPanel Orientation="Horizontal" Spacing="8"><ComboBox x:Name="ShelfPicker" Width="180" PlaceholderText="Choose shelf" SelectionChanged="ShelfPicker_SelectionChanged"/><TextBox x:Name="NewShelfNameBox" Width="150" PlaceholderText="New shelf name"/><Button Content="Add shelf" Click="AddShelfButton_Click"/></StackPanel>
+                        <Border x:Name="FileDropZone" AllowDrop="True" DragOver="FileDropZone_DragOver" Drop="FileDropZone_Drop" Background="#FF1B2030" BorderBrush="#FF8D71B8" BorderThickness="1" CornerRadius="10" Padding="14"><TextBlock Text="Drop files here to add them to the selected shelf · or choose files below" Foreground="#FFD7A5F4" TextWrapping="Wrap" HorizontalAlignment="Center"/></Border>
                         <Button Content="Choose files" Click="AddFileButton_Click" HorizontalAlignment="Left"/>
                         <ListView x:Name="FilesList" SelectionMode="Single" IsItemClickEnabled="True" ItemClick="FileItem_Click" MaxHeight="480"/>
-                        <Button Content="Remove selected" Click="RemoveFileButton_Click" HorizontalAlignment="Left"/>
+                        <StackPanel Orientation="Horizontal" Spacing="8"><Button Content="Remove selected" Click="RemoveFileButton_Click"/><Button Content="Open selected" Click="OpenSelectedFileButton_Click"/></StackPanel>
+                        <Border Background="#FF151923" CornerRadius="14" Padding="14"><StackPanel Spacing="8"><TextBlock Text="IMAGE &amp; PDF CONVERTER" Foreground="#FFD7A5F4" FontSize="10"/><ComboBox x:Name="ImageFormatBox" SelectedIndex="0"><ComboBoxItem Content="PNG"/><ComboBoxItem Content="JPG"/><ComboBoxItem Content="WEBP"/><ComboBoxItem Content="BMP"/><ComboBoxItem Content="PDF"/></ComboBox><Button Content="Choose image and convert" Click="ConvertImageButton_Click" HorizontalAlignment="Left"/><TextBlock x:Name="ConversionStatusText" Foreground="#FF9A9EAD" TextWrapping="Wrap"/></StackPanel></Border>
                     </StackPanel>
                     <StackPanel x:Name="MediaPage" Visibility="Collapsed" Spacing="12">
                         <TextBlock Text="Media controls" FontSize="25" Foreground="#FFF6F3FA" FontWeight="SemiBold"/>
@@ -80,7 +84,9 @@
                             <TextBlock Text="LOCAL REMINDERS" Foreground="#FFD7A5F4" FontSize="10"/>
                             <TextBox x:Name="ReminderTextBox" PlaceholderText="What should SAMY remind you about?"/>
                             <TimePicker x:Name="ReminderTimePicker" ClockIdentifier="24HourClock"/>
+                            <ComboBox x:Name="ReminderRecurrenceBox" SelectedIndex="0"><ComboBoxItem Content="Does not repeat" Tag="ONCE"/><ComboBoxItem Content="Every day" Tag="DAILY"/><ComboBoxItem Content="Every week" Tag="WEEKLY"/><ComboBoxItem Content="Every month" Tag="MONTHLY"/></ComboBox>
                             <Button Content="Add reminder for selected day" Click="AddReminderButton_Click" HorizontalAlignment="Left"/>
+                            <TextBlock Text="CALENDAR FEED SUBSCRIPTION" Foreground="#FFD7A5F4" FontSize="10"/><TextBox x:Name="CalendarFeedUrlBox" PlaceholderText="HTTPS .ics calendar feed URL"/><Button Content="Subscribe / refresh feed" Click="SubscribeCalendarFeedButton_Click" HorizontalAlignment="Left"/>
                             <TextBlock x:Name="ReminderStatusText" Text="Reminders stay on this PC and appear inside SAMY." Foreground="#FF9A9EAD" TextWrapping="Wrap" FontSize="11"/>
                             <ListView x:Name="RemindersList" MaxHeight="180"/>
                             <TextBlock Text="SAMY provides a local date picker and in-app reminders, and can open your configured Windows calendar. It does not sync account calendars." Foreground="#FF9A9EAD" TextWrapping="Wrap" FontSize="11"/></StackPanel></Border>
@@ -135,6 +141,12 @@
                             <TextBlock x:Name="ScreenTimeText" Foreground="#FFF6F3FA" Text="Enable screen-time tracking in Settings to begin."/>
                         </StackPanel></Border>
                         <Border Background="#FF151923" CornerRadius="14" Padding="14"><StackPanel Spacing="8"><TextBlock Text="CONNECTED SERVICES" Foreground="#FFD7A5F4" FontSize="10"/><TextBlock Text="Weather, screen-time reporting, coding analytics, sales analytics and revenue integrations require provider/location consent and dedicated validation. They are not shown as connected in this build." Foreground="#FF9A9EAD" TextWrapping="Wrap"/></StackPanel></Border>
+                    </StackPanel>
+                    <StackPanel x:Name="InsightsPage" Visibility="Collapsed" Spacing="14">
+                        <TextBlock Text="System &amp; developer insights" FontSize="25" Foreground="#FFF6F3FA" FontWeight="SemiBold"/>
+                        <Border Background="#FF151923" CornerRadius="14" Padding="14"><StackPanel Spacing="8"><TextBlock Text="WHOLE-DEVICE STATUS" Foreground="#FFD7A5F4" FontSize="10"/><TextBlock x:Name="SystemExtrasText" Text="Collecting disk, network, battery and audio status…" Foreground="#FFF6F3FA" TextWrapping="Wrap"/><Button Content="Refresh system details" Click="RefreshSystemDetailsButton_Click" HorizontalAlignment="Left"/></StackPanel></Border>
+                        <Border Background="#FF151923" CornerRadius="14" Padding="14"><StackPanel Spacing="8"><TextBlock Text="CODING ACTIVITY · LOCAL GIT REPOSITORY" Foreground="#FFD7A5F4" FontSize="10"/><TextBlock Text="SAMY reads Git commit metadata and changed file extensions from a folder you select. No source code is uploaded." Foreground="#FF9A9EAD" TextWrapping="Wrap"/><TextBox x:Name="CodingRepoPathBox" PlaceholderText="Select a local Git repository folder"/><StackPanel Orientation="Horizontal" Spacing="8"><Button Content="Choose folder" Click="ChooseCodingRepoButton_Click"/><Button Content="Analyze last 30 days" Click="AnalyzeCodingButton_Click"/></StackPanel><TextBlock x:Name="CodingReportText" Foreground="#FFF6F3FA" TextWrapping="Wrap"/></StackPanel></Border>
+                        <Border Background="#FF151923" CornerRadius="14" Padding="14"><StackPanel Spacing="8"><TextBlock Text="AUTHENTICATED ANALYTICS API" Foreground="#FFD7A5F4" FontSize="10"/><TextBlock Text="Connect a provider's HTTPS JSON endpoint with a bearer API token. SAMY tests the real endpoint and stores the token encrypted for this Windows account. No sample metrics are generated." Foreground="#FF9A9EAD" TextWrapping="Wrap"/><TextBox x:Name="ProviderEndpointBox" PlaceholderText="https://provider.example/api/analytics"/><PasswordBox x:Name="ProviderTokenBox" PlaceholderText="Bearer API token"/><Button Content="Test and save connection" Click="ConnectProviderButton_Click" HorizontalAlignment="Left"/><TextBlock x:Name="ProviderStatusText" Foreground="#FFF6F3FA" TextWrapping="Wrap"/></StackPanel></Border>
                     </StackPanel>
                     <StackPanel x:Name="SettingsPage" Visibility="Collapsed" Spacing="14">
                         <TextBlock Text="Settings" FontSize="25" Foreground="#FFF6F3FA" FontWeight="SemiBold"/>
