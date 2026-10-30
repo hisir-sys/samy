@@ -99,6 +99,23 @@ Previously implemented modules remain available: floating workspace, local notes
 
 Implemented in the current main branch: multiple named file shelves with drag-in, image format conversion, image-to-PDF and PDF-page-to-PNG export, recurring local reminders, persisted HTTPS .ics feed subscriptions, whole-device CPU/RAM/disk/network/battery/audio status, local Git coding activity summaries, and a generic authenticated HTTPS JSON API connection using a Windows DPAPI-protected bearer token. Reminder toasts use the Windows App SDK notification manager. The floating window positions itself relative to the monitor it currently occupies.
 
-Still requiring release validation or further work: drag files out of shelves; full iCalendar timezone and exception-rule support; provider-specific OAuth and analytics schemas; richer system graphs; notification activation/quiet-hours behavior; and physical Windows 11 tests for the notch, multi-monitor DPI/scaling, drag/drop, conversions, audio, and clean-install startup. CI success alone does not verify these desktop interactions.
+Still requiring release validation or further work: full iCalendar timezone and exception-rule support; provider-specific OAuth and analytics schemas; richer system graphs; notification activation/quiet-hours behavior; and physical Windows 11 tests for the notch, multi-monitor DPI/scaling, drag/drop, conversions, audio, and clean-install startup. CI success alone does not verify these desktop interactions.
 
 The current Windows build is under CI validation. No installer is considered verified until the latest commit's installer workflow succeeds and its artifact is inspected.
+
+
+## Windows 11 manual verification checklist
+
+These checks are intentionally not marked as passed by CI:
+- [ ] Install on a clean Windows 11 x64 account and launch from Start Menu.
+- [ ] Confirm the startup diagnostic file is absent on a normal launch; confirm recovery UI on a controlled failure.
+- [ ] Move the floating window between two monitors with different scaling, then collapse/expand and confirm it stays on the active monitor.
+- [ ] Verify always-on-top toggle, title-bar drag, close and restart persistence.
+- [ ] Drag files into a shelf and out to Explorer; test several shelves and missing-file paths.
+- [ ] Convert representative PNG/JPEG/WebP/BMP files, image-to-PDF, and a multi-page PDF to PNG.
+- [ ] Test recurring daily/weekly/monthly reminders across app restarts.
+- [ ] Subscribe, refresh, edit and unsubscribe an HTTPS .ics feed; confirm cancelled/upcoming events reconcile.
+- [ ] Confirm disk/network/battery/audio values against Windows Settings / Task Manager.
+- [ ] Test Git analytics against a local repository with known commits and no source upload.
+- [ ] Test bearer-token provider connection against a real test endpoint; verify invalid credentials are rejected and token file is DPAPI-protected.
+- [ ] Confirm Windows toast delivery, notification-centre display and behavior when notifications are disabled.
