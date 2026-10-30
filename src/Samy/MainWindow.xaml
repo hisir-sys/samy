@@ -8,7 +8,14 @@
         <Grid x:Name="DragRegion" Grid.Row="0" ColumnSpacing="12">
             <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
             <StackPanel Orientation="Horizontal" Spacing="10" VerticalAlignment="Center">
-                <Border Width="30" Height="30" CornerRadius="10" Background="#FFD7A5F4"><TextBlock Text="S" Foreground="#FF17121D" FontSize="18" FontWeight="Bold" HorizontalAlignment="Center" VerticalAlignment="Center"/></Border>
+                <Border Width="34" Height="34" CornerRadius="11" Background="#FF111522" BorderBrush="#FFD7A5F4" BorderThickness="1">
+                    <Viewbox Width="23" Height="23" Stretch="Uniform">
+                        <Canvas Width="30" Height="30">
+                            <Path Data="M 23,6 C 19,1 8,2 7,10 C 6,17 23,13 23,21 C 23,29 11,30 6,23" Stroke="#FFE8CDF9" StrokeThickness="3.6" StrokeStartLineCap="Round" StrokeEndLineCap="Round" StrokeLineJoin="Round" Fill="Transparent"/>
+                            <Ellipse Canvas.Left="21" Canvas.Top="2" Width="4" Height="4" Fill="#FFD7A5F4"/>
+                        </Canvas>
+                    </Viewbox>
+                </Border>
                 <TextBlock Text="SAMY" Foreground="#FFF6F3FA" FontSize="16" FontWeight="SemiBold" VerticalAlignment="Center"/>
                 <TextBlock x:Name="ClockText" Text="--:--" Foreground="#FF9A9EAD" VerticalAlignment="Center"/>
             </StackPanel>
