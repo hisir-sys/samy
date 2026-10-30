@@ -1,23 +1,25 @@
 # SAMY Windows installer
 
-The Windows CI workflow creates **SAMY-Setup.exe** for Windows 11 x64.
+The main-branch Windows workflow publishes **SAMY-Setup.exe** as a GitHub Release asset after a successful x64 installer build.
+
+## Download
+
+Open the [latest SAMY release](https://github.com/hisir-sys/samy/releases/latest) and download **SAMY-Setup.exe**.
+
+If a workflow is still running and no release has been published yet, open the repository's Actions tab, select the latest successful **Windows build and installer** run, and download the **SAMY-Windows-Installer** artifact. Actions artifacts expire; GitHub Release assets are the permanent download.
 
 ## What the installer does
 
-- Installs SAMY for the current user without an administrator prompt.
+- Installs SAMY for the current user without requiring an administrator prompt.
 - Adds a SAMY shortcut to the Start Menu.
 - Offers an optional Desktop shortcut.
 - Offers optional launch-at-sign-in through the current user's Startup folder.
 - Offers to launch SAMY after installation.
 - Registers a normal Windows uninstall entry.
 
-## Get the installer
-
-Open the repository's **Actions** tab, select the latest successful **Windows build and installer** run, and download the **SAMY-Windows-Installer** artifact. GitHub Actions artifacts are temporary build downloads, not a permanent public release.
-
 ## Build locally
 
-Install .NET 10 SDK and Inno Setup 6 on Windows 11, then run from the repository root:
+On Windows 11, install the .NET 10 SDK and Inno Setup 6, then run from the repository root:
 
 ```powershell
 dotnet publish .\src\Samy\Samy.csproj -c Release -r win-x64 --self-contained true -p:WindowsAppSDKSelfContained=true -p:PublishSingleFile=false -o publish\win-x64
@@ -27,9 +29,9 @@ New-Item -ItemType Directory -Force artifacts | Out-Null
 
 The installer is written to `artifacts\SAMY-Setup.exe`.
 
-## Notes
+## Platform and trust notes
 
-- This first installer targets Windows 11 x64. ARM64 packaging is a separate build target.
-- The app uses self-contained Windows App SDK deployment. The installer bundles the published application files.
-- The installer is not code-signed yet. Windows SmartScreen may show an unknown-publisher warning until a trusted code-signing certificate is configured.
-- The installer workflow must complete successfully before an installer artifact exists.
+- This release targets Windows 11 x64. ARM64 packaging is not included.
+- The app uses self-contained Windows App SDK deployment; the installer bundles the published application files.
+- The installer is not code-signed. Windows SmartScreen may show an unknown-publisher warning.
+- A successful CI build verifies compilation and packaging, not a full interactive Windows 11 usability test. Test installation, launch, shortcuts, app behavior, and uninstall on a Windows 11 device before broad distribution.
