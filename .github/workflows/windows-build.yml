@@ -73,9 +73,9 @@ jobs:
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: v0.2.1
+          tag_name: v0.3.0
           target_commitish: ${{ github.sha }}
-          name: SAMY v0.2.1
+          name: SAMY v0.3.0
           generate_release_notes: true
           fail_on_unmatched_files: true
           files: artifacts/SAMY-Setup.exe

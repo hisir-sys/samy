@@ -1,5 +1,5 @@
 #define AppName "SAMY"
-#define AppVersion "0.2.1"
+#define AppVersion "0.3.0"
 #define AppPublisher "SAMY"
 #define AppExeName "Samy.exe"
 

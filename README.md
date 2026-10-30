@@ -8,7 +8,7 @@
 
 ## Current release
 
-- **Version:** 0.2.1
+- **Version:** 0.3.0
 - **Platform:** Windows 11 x64
 - **Installer:** [SAMY-Setup.exe — latest release](https://github.com/hisir-sys/samy/releases/latest)
 - **Build:** Windows CI builds the app, publishes a self-contained x64 package, and creates the installer.
