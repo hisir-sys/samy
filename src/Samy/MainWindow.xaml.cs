@@ -690,6 +690,53 @@ public sealed partial class MainWindow : Window
         }
     }
 
+    private async void FilesList_DragItemsStarting(object sender, DragItemsStartingEventArgs e)
+    {
+        try
+        {
+            var files = new List<Windows.Storage.IStorageItem>();
+            foreach (var item in e.Items)
+            {
+                int index = FilesList.Items.IndexOf(item);
+                if (index < 0 || index >= _fileItems.Count || !File.Exists(_fileItems[index])) continue;
+                files.Add(await Windows.Storage.StorageFile.GetFileFromPathAsync(_fileItems[index]));
+            }
+            if (files.Count == 0) { e.Cancel = true; return; }
+            e.Data.SetStorageItems(files);
+            e.Data.RequestedOperation = DataPackageOperation.Copy;
+        }
+        catch (Exception ex) when (ex is COMException or UnauthorizedAccessException or InvalidOperationException)
+        {
+            ConversionStatusText.Text = "Couldn't prepare files for drag-out.";
+            e.Cancel = true;
+        }
+    }
+
+    private void CopySelectedFilePathButton_Click(object sender, RoutedEventArgs e)
+    {
+        int index = FilesList.SelectedIndex;
+        if (index < 0 || index >= _fileItems.Count) { ConversionStatusText.Text = "Select a file first."; return; }
+        var package = new DataPackage();
+        package.SetText(_fileItems[index]);
+        Clipboard.SetContent(package);
+        ConversionStatusText.Text = "File path copied to clipboard.";
+    }
+
+    private void RemoveShelfButton_Click(object sender, RoutedEventArgs e)
+    {
+        if (_shelves.Count <= 1) { ConversionStatusText.Text = "Keep at least one shelf."; return; }
+        _shelves.Remove(_selectedShelf);
+        _selectedShelf = _shelves.Keys.First();
+        _fileItems.Clear();
+        _fileItems.AddRange(_shelves[_selectedShelf]);
+        ShelfPicker.Items.Clear();
+        foreach (string name in _shelves.Keys.OrderBy(k => k)) ShelfPicker.Items.Add(name);
+        ShelfPicker.SelectedItem = _selectedShelf;
+        RefreshFilesList();
+        SaveShelves();
+        ConversionStatusText.Text = "Shelf removed. Files themselves were not deleted.";
+    }
+
     private void OpenSelectedFileButton_Click(object sender, RoutedEventArgs e)
     {
         int index = FilesList.SelectedIndex;
