@@ -21,6 +21,10 @@ dotnet build .\src\Samy\Samy.csproj -c Debug
 
 Open `src/Samy/Samy.csproj` in Visual Studio and run the project to launch the desktop app.
 
+## Create the Windows installer
+
+See [INSTALLER.md](INSTALLER.md). The Windows Actions workflow publishes a self-contained x64 build and packages it as `SAMY-Setup.exe` using Inno Setup.
+
 ## Current implemented behavior
 
 - SAMY-branded WinUI 3 dashboard shell
@@ -29,10 +33,10 @@ Open `src/Samy/Samy.csproj` in Visual Studio and run the project to launch the d
 - 25-minute focus timer with start, pause, resume, and reset
 - Quick note saved under the current user's Local AppData folder at `%LOCALAPPDATA%\SAMY\quick-note.txt`
 
-## Not implemented yet
+## Still in development
 
-The compact dashboard is currently a normal app window. The always-on-top floating notch, global clipboard monitoring, file shelf picker, media-session integration, calendar sync, notification rules, tray integration, and startup registration are planned follow-up milestones.
+The initial app shell is not yet the finished productivity companion. The compact always-on-top floating notch, global clipboard history, file shelf, media-session controls, calendar integration, settings, tray integration, and automated UI tests still require implementation and Windows-device validation.
 
 ## Privacy notes
 
-SAMY does not upload the quick note. The first metrics are limited to the SAMY process; they are not whole-system CPU or RAM readings. Clipboard collection is not enabled in this foundation build.
+SAMY does not upload the quick note. The first metrics are limited to the SAMY process; they are not whole-system CPU or RAM readings. Clipboard collection is not enabled in this build.
