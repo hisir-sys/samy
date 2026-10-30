@@ -145,7 +145,9 @@ public sealed partial class MainWindow : Window
     {
         await LoadNoteAsync();
         LoadJsonList(_clipboardPath, _clipboardItems);
-        LoadJsonList(_clipboardPinsPath, _pinnedClipboardItems);
+        var savedPins = new List<string>();
+        LoadJsonList(_clipboardPinsPath, savedPins);
+        foreach (string pin in savedPins) _pinnedClipboardItems.Add(pin);
         try
         {
             if (File.Exists(_clipboardTimesPath))
