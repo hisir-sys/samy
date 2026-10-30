@@ -32,6 +32,14 @@ public sealed partial class MainWindow : Window
     private readonly string _filesPath;
     private readonly string _settingsPath;
     private readonly string _remindersPath;
+    private readonly string _linksPath;
+    private readonly string _tasksPath;
+    private readonly List<SamyLink> _savedLinks = [];
+    private readonly List<SamyTask> _tasks = [];
+    private int _toolSeconds = 25 * 60;
+    private bool _toolTimerRunning;
+    private bool _stopwatchMode;
+    private int _stopwatchSeconds;
     private readonly List<SamyReminder> _reminders = [];
     private readonly List<string> _clipboardItems = [];
     private readonly List<string> _fileItems = [];
@@ -60,6 +68,8 @@ public sealed partial class MainWindow : Window
         _filesPath = Path.Combine(_dataDirectory, "file-shelf.json");
         _settingsPath = Path.Combine(_dataDirectory, "settings.json");
         _remindersPath = Path.Combine(_dataDirectory, "reminders.json");
+        _linksPath = Path.Combine(_dataDirectory, "saved-links.json");
+        _tasksPath = Path.Combine(_dataDirectory, "tasks.json");
 
         ConfigureWindow();
         _currentProcess = Process.GetCurrentProcess();
@@ -111,6 +121,7 @@ public sealed partial class MainWindow : Window
         LoadJsonList(_clipboardPath, _clipboardItems);
         LoadJsonList(_filesPath, _fileItems);
         LoadReminders();
+        LoadToolData();
         RefreshClipboardList();
         RefreshFilesList();
         LoadSettings();
@@ -122,6 +133,14 @@ public sealed partial class MainWindow : Window
         UpdateClock();
         RefreshMetrics();
         CheckReminders();
+        UpdateWorldClocks();
+        if (_toolTimerRunning)
+        {
+            if (_stopwatchMode) _stopwatchSeconds++;
+            else _toolSeconds = Math.Max(0, _toolSeconds - 1);
+            UpdateToolTimerDisplay();
+            if (!_stopwatchMode && _toolSeconds == 0) { _toolTimerRunning = false; MessagePreviewText.Text = "Timer complete"; }
+        }
         if (!_focusIsRunning) return;
         _focusSecondsRemaining = Math.Max(0, _focusSecondsRemaining - 1);
         UpdateFocusDisplay();
@@ -219,6 +238,7 @@ public sealed partial class MainWindow : Window
         MediaPage.Visibility = Visibility.Collapsed;
         CalendarPage.Visibility = Visibility.Collapsed;
         SettingsPage.Visibility = Visibility.Collapsed;
+        ToolsPage.Visibility = Visibility.Collapsed;
         page.Visibility = Visibility.Visible;
     }
 
@@ -228,6 +248,7 @@ public sealed partial class MainWindow : Window
     private void MediaNav_Click(object sender, RoutedEventArgs e) => ShowPage(MediaPage);
     private void CalendarNav_Click(object sender, RoutedEventArgs e) => ShowPage(CalendarPage);
     private void SettingsNav_Click(object sender, RoutedEventArgs e) => ShowPage(SettingsPage);
+    private void ToolsNav_Click(object sender, RoutedEventArgs e) { ShowPage(ToolsPage); RefreshToolLists(); UpdateWorldClocks(); UpdateToolTimerDisplay(); }
 
     private void CollapseButton_Click(object sender, RoutedEventArgs e)
     {
@@ -467,6 +488,126 @@ public sealed partial class MainWindow : Window
     }
 
 
+
+    private void LoadToolData()
+    {
+        try
+        {
+            if (File.Exists(_linksPath)) _savedLinks.AddRange(JsonSerializer.Deserialize<List<SamyLink>>(File.ReadAllText(_linksPath)) ?? []);
+            if (File.Exists(_tasksPath)) _tasks.AddRange(JsonSerializer.Deserialize<List<SamyTask>>(File.ReadAllText(_tasksPath)) ?? []);
+        }
+        catch (Exception ex) when (ex is IOException or JsonException or UnauthorizedAccessException) { }
+        RefreshToolLists();
+    }
+
+    private void SaveToolData()
+    {
+        try
+        {
+            File.WriteAllText(_linksPath, JsonSerializer.Serialize(_savedLinks));
+            File.WriteAllText(_tasksPath, JsonSerializer.Serialize(_tasks));
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { }
+    }
+
+    private void RefreshToolLists()
+    {
+        SavedLinksList.Items.Clear();
+        foreach (var link in _savedLinks) SavedLinksList.Items.Add(link.Title + "  ·  " + link.Url);
+        TasksList.Items.Clear();
+        foreach (var task in _tasks) TasksList.Items.Add((task.Done ? "✓  " : "○  ") + task.Text);
+    }
+
+    private void SaveLinkButton_Click(object sender, RoutedEventArgs e)
+    {
+        string title = LinkTitleBox.Text.Trim();
+        string rawUrl = LinkUrlBox.Text.Trim();
+        if (title.Length == 0 || !Uri.TryCreate(rawUrl, UriKind.Absolute, out var uri) || (uri.Scheme != "https" && uri.Scheme != "http"))
+        { MessagePreviewText.Text = "Enter a title and a valid http/https URL."; return; }
+        _savedLinks.Add(new SamyLink { Title = title, Url = uri.ToString() });
+        SaveToolData(); RefreshToolLists(); LinkTitleBox.Text = ""; LinkUrlBox.Text = "";
+    }
+
+    private void SavedLinkItem_Click(object sender, ItemClickEventArgs e)
+    {
+        int index = SavedLinksList.Items.IndexOf(e.ClickedItem);
+        if (index < 0 || index >= _savedLinks.Count) return;
+        try { Process.Start(new ProcessStartInfo(_savedLinks[index].Url) { UseShellExecute = true }); }
+        catch (Exception ex) when (ex is InvalidOperationException or System.ComponentModel.Win32Exception) { MessagePreviewText.Text = "Windows couldn't open this link."; }
+    }
+
+    private void RemoveLinkButton_Click(object sender, RoutedEventArgs e)
+    {
+        int index = SavedLinksList.SelectedIndex;
+        if (index < 0 || index >= _savedLinks.Count) return;
+        _savedLinks.RemoveAt(index); SaveToolData(); RefreshToolLists();
+    }
+
+    private void AddTaskButton_Click(object sender, RoutedEventArgs e)
+    {
+        string value = TaskBox.Text.Trim();
+        if (value.Length == 0) return;
+        _tasks.Add(new SamyTask { Text = value }); TaskBox.Text = ""; SaveToolData(); RefreshToolLists();
+    }
+
+    private void CompleteTaskButton_Click(object sender, RoutedEventArgs e)
+    {
+        int index = TasksList.SelectedIndex;
+        if (index < 0 || index >= _tasks.Count) return;
+        _tasks[index].Done = !_tasks[index].Done; SaveToolData(); RefreshToolLists();
+    }
+
+    private void ToolTimerToggle_Click(object sender, RoutedEventArgs e) { _toolTimerRunning = !_toolTimerRunning; }
+    private void ToolTimerReset_Click(object sender, RoutedEventArgs e) { _toolTimerRunning = false; _toolSeconds = 25 * 60; _stopwatchSeconds = 0; _stopwatchMode = false; UpdateToolTimerDisplay(); }
+    private void ToolPomodoro_Click(object sender, RoutedEventArgs e) { _toolTimerRunning = false; _stopwatchMode = false; _toolSeconds = 25 * 60; UpdateToolTimerDisplay(); }
+    private void ToolStopwatch_Click(object sender, RoutedEventArgs e) { _toolTimerRunning = false; _stopwatchMode = true; _stopwatchSeconds = 0; UpdateToolTimerDisplay(); }
+    private void ToolCountdown_Click(object sender, RoutedEventArgs e)
+    {
+        if (!int.TryParse(CountdownMinutesBox.Text, out int minutes) || minutes < 1 || minutes > 1440)
+        { MessagePreviewText.Text = "Enter a countdown from 1 to 1440 minutes."; return; }
+        _toolTimerRunning = false; _stopwatchMode = false; _toolSeconds = minutes * 60; UpdateToolTimerDisplay();
+    }
+
+    private void UpdateToolTimerDisplay()
+    {
+        int seconds = _stopwatchMode ? _stopwatchSeconds : _toolSeconds;
+        ToolTimerText.Text = $"{seconds / 3600:00}:{(seconds / 60) % 60:00}:{seconds % 60:00}";
+    }
+
+    private void ConvertUnitButton_Click(object sender, RoutedEventArgs e)
+    {
+        if (!double.TryParse(UnitInputBox.Text, System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out double value))
+        { UnitResultText.Text = "Enter a valid number."; return; }
+        double result = UnitTypeBox.SelectedIndex switch
+        {
+            0 => value * 3.280839895,
+            1 => value * 2.2046226218,
+            2 => value * 9 / 5 + 32,
+            3 => value / 1024,
+            _ => double.NaN
+        };
+        string unit = UnitTypeBox.SelectedIndex switch { 0 => "ft", 1 => "lb", 2 => "°F", 3 => "GB", _ => "" };
+        UnitResultText.Text = $"{result:0.####} {unit}";
+    }
+
+    private void UpdateWorldClocks()
+    {
+        try
+        {
+            var kolkata = TimeZoneInfo.ConvertTime(DateTimeOffset.UtcNow, TimeZoneInfo.FindSystemTimeZoneById("India Standard Time"));
+            var london = TimeZoneInfo.ConvertTime(DateTimeOffset.UtcNow, TimeZoneInfo.FindSystemTimeZoneById("GMT Standard Time"));
+            var ny = TimeZoneInfo.ConvertTime(DateTimeOffset.UtcNow, TimeZoneInfo.FindSystemTimeZoneById("Eastern Standard Time"));
+            WorldClocksText.Text = $"Kolkata  {kolkata:ddd HH:mm}\nLondon  {london:ddd HH:mm}\nNew York  {ny:ddd HH:mm}";
+        }
+        catch (TimeZoneNotFoundException) { WorldClocksText.Text = "World clock data unavailable."; }
+    }
+
+    private void ShowMessageButton_Click(object sender, RoutedEventArgs e)
+    {
+        string message = MessageBox.Text.Trim();
+        MessagePreviewText.Text = message.Length == 0 ? "Enter a message first." : "★  " + message;
+    }
+
     private void LoadReminders()
     {
         try
@@ -604,3 +745,7 @@ public sealed class SamyReminder
     public DateTime DueAt { get; set; }
     public bool Notified { get; set; }
 }
+
+
+public sealed class SamyLink { public string Title { get; set; } = ""; public string Url { get; set; } = ""; }
+public sealed class SamyTask { public string Text { get; set; } = ""; public bool Done { get; set; } }
