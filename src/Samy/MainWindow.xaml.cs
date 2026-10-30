@@ -1218,6 +1218,18 @@ public sealed partial class MainWindow : Window
         await RefreshCalendarFeedsAsync();
     }
 
+    private void UnsubscribeCalendarFeedButton_Click(object sender, RoutedEventArgs e)
+    {
+        string url = CalendarFeedUrlBox.Text.Trim();
+        if (!_calendarFeedUrls.RemoveAll(value => value.Equals(url, StringComparison.OrdinalIgnoreCase)).Equals(0))
+        {
+            _reminders.RemoveAll(item => item.FeedSource == url && item.DueAt >= DateTime.Now);
+            SaveCalendarFeeds(); SaveReminders(); RefreshRemindersList();
+            ReminderStatusText.Text = "Unsubscribed. Upcoming events from this feed were removed; past reminders were kept.";
+        }
+        else ReminderStatusText.Text = "That HTTPS feed is not subscribed.";
+    }
+
     private async Task RefreshCalendarFeedsAsync()
     {
         if (_calendarFeedRefreshRunning || _calendarFeedUrls.Count == 0) return;
@@ -1232,6 +1244,8 @@ public sealed partial class MainWindow : Window
                 {
                     string ics = await client.GetStringAsync(url);
                     if (ics.Length > 2_000_000) { failed++; continue; }
+                    // Replace this feed's upcoming entries with its latest published view.
+                    _reminders.RemoveAll(existing => existing.FeedSource == url && existing.DueAt >= DateTime.Now);
                     var imported = AdvancedServices.ParseCalendarFeed(ics, url, DateTime.Now);
                     foreach (var item in imported)
                     {
