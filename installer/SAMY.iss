@@ -32,7 +32,7 @@ Source: "..\dependencies\VC_redist.x64.exe"; DestDir: "{tmp}"; Flags: deleteafte
 Source: "..\publish\win-x64\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
 
 [Icons]
-Name: "{autoprograms}\SAMY"; Filename: "{app}\{#AppExeName}"; WorkingDir: "{app}"
+Name: "{autoprograms}\SAMY"; Filename: "{app}\{#AppExeName}"; WorkingDir: "{app}"; AppUserModelID: "SAMY.Desktop"
 Name: "{autodesktop}\SAMY"; Filename: "{app}\{#AppExeName}"; WorkingDir: "{app}"; Tasks: desktopicon
 Name: "{userstartup}\SAMY"; Filename: "{app}\{#AppExeName}"; WorkingDir: "{app}"; Tasks: startup
 
