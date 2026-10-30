@@ -703,11 +703,37 @@ public sealed partial class MainWindow : Window
         try
         {
             var open = new FileOpenPicker();
-            foreach (string extension in new[] { ".png", ".jpg", ".jpeg", ".bmp", ".webp", ".gif" }) open.FileTypeFilter.Add(extension);
+            foreach (string extension in new[] { ".png", ".jpg", ".jpeg", ".bmp", ".webp", ".gif", ".pdf" }) open.FileTypeFilter.Add(extension);
             InitializeWithWindow.Initialize(open, WindowNative.GetWindowHandle(this));
             var source = await open.PickSingleFileAsync();
             if (source is null) return;
             string format = (ImageFormatBox.SelectedItem as ComboBoxItem)?.Content?.ToString() ?? "PNG";
+            if (format == "PDF pages to PNG")
+            {
+                var folderPicker = new FolderPicker();
+                folderPicker.FileTypeFilter.Add("*");
+                InitializeWithWindow.Initialize(folderPicker, WindowNative.GetWindowHandle(this));
+                var folder = await folderPicker.PickSingleFolderAsync();
+                if (folder is null) return;
+                var pdf = await Windows.Data.Pdf.PdfDocument.LoadFromFileAsync(source);
+                for (uint pageIndex = 0; pageIndex < pdf.PageCount; pageIndex++)
+                {
+                    using var page = pdf.GetPage(pageIndex);
+                    using var stream = new Windows.Storage.Streams.InMemoryRandomAccessStream();
+                    await page.RenderToStreamAsync(stream);
+                    stream.Seek(0);
+                    using var reader = new Windows.Storage.Streams.DataReader(stream.GetInputStreamAt(0));
+                    await reader.LoadAsync((uint)stream.Size);
+                    byte[] pageBytes = new byte[(int)stream.Size];
+                    reader.ReadBytes(pageBytes);
+                    string outputPath = Path.Combine(folder.Path, $"{Path.GetFileNameWithoutExtension(source.Name)}-page-{pageIndex + 1}.png");
+                    await File.WriteAllBytesAsync(outputPath, pageBytes);
+                }
+                ConversionStatusText.Text = $"Rendered {pdf.PageCount} PDF page(s) to PNG in {folder.Path}";
+                return;
+            }
+            if (Path.GetExtension(source.Name).Equals(".pdf", StringComparison.OrdinalIgnoreCase))
+                throw new InvalidOperationException("Select PDF pages to PNG for a PDF source.");
             string extensionOut = format == "JPG" ? ".jpg" : "." + format.ToLowerInvariant();
             var save = new FileSavePicker();
             save.FileTypeChoices.Add(format, new List<string> { extensionOut });
