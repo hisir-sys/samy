@@ -1350,10 +1350,20 @@ public sealed partial class MainWindow : Window
         try
         {
             SetCurrentProcessExplicitAppUserModelID("SAMY.Desktop");
+            AppNotificationManager.Default.NotificationInvoked += NativeNotification_Invoked;
             AppNotificationManager.Default.Register();
             _notificationsRegistered = true;
         }
         catch (Exception ex) { _notificationsRegistered = false; ProviderStatusText.Text = "Windows notifications could not be registered: " + ex.Message; }
+    }
+
+    private void NativeNotification_Invoked(AppNotificationManager sender, AppNotificationActivatedEventArgs args)
+    {
+        DispatcherQueue.TryEnqueue(() =>
+        {
+            Activate();
+            ShowPage(CalendarPage);
+        });
     }
 
     private void TestNotificationButton_Click(object sender, RoutedEventArgs e)
@@ -1402,6 +1412,11 @@ public sealed partial class MainWindow : Window
         _uiTimer.Stop();
         if (_screenTimeEnabled) SaveScreenTime();
         _clipboardTimer.Stop();
+        if (_notificationsRegistered)
+        {
+            try { AppNotificationManager.Default.Unregister(); } catch { }
+            _notificationsRegistered = false;
+        }
         _currentProcess.Dispose();
         SaveSettings();
     }
