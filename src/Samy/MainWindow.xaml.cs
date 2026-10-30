@@ -5,6 +5,7 @@ using Microsoft.UI;
 using Microsoft.UI.Dispatching;
 using Microsoft.UI.Windowing;
 using Microsoft.UI.Xaml;
+using Microsoft.UI.Xaml.Controls;
 using Windows.ApplicationModel.DataTransfer;
 using Windows.Media.Control;
 using Windows.Storage.Pickers;
@@ -32,6 +33,16 @@ public sealed partial class MainWindow : Window
     private readonly string _filesPath;
     private readonly string _settingsPath;
     private readonly string _remindersPath;
+    private readonly string _linksPath;
+    private readonly string _tasksPath;
+    private readonly List<SamyLink> _savedLinks = [];
+    private readonly List<SamyTask> _tasks = [];
+    private static readonly HttpClient _http = new() { Timeout = TimeSpan.FromSeconds(8) };
+    private readonly Dictionary<string, int> _foregroundSeconds = new(StringComparer.OrdinalIgnoreCase);
+    private int _toolSeconds = 25 * 60;
+    private bool _toolTimerRunning;
+    private bool _stopwatchMode;
+    private int _stopwatchSeconds;
     private readonly List<SamyReminder> _reminders = [];
     private readonly List<string> _clipboardItems = [];
     private readonly List<string> _fileItems = [];
@@ -60,6 +71,8 @@ public sealed partial class MainWindow : Window
         _filesPath = Path.Combine(_dataDirectory, "file-shelf.json");
         _settingsPath = Path.Combine(_dataDirectory, "settings.json");
         _remindersPath = Path.Combine(_dataDirectory, "reminders.json");
+        _linksPath = Path.Combine(_dataDirectory, "saved-links.json");
+        _tasksPath = Path.Combine(_dataDirectory, "tasks.json");
 
         ConfigureWindow();
         _currentProcess = Process.GetCurrentProcess();
@@ -111,6 +124,7 @@ public sealed partial class MainWindow : Window
         LoadJsonList(_clipboardPath, _clipboardItems);
         LoadJsonList(_filesPath, _fileItems);
         LoadReminders();
+        LoadToolData();
         RefreshClipboardList();
         RefreshFilesList();
         LoadSettings();
@@ -122,6 +136,15 @@ public sealed partial class MainWindow : Window
         UpdateClock();
         RefreshMetrics();
         CheckReminders();
+        UpdateWorldClocks();
+        TrackForegroundApp();
+        if (_toolTimerRunning)
+        {
+            if (_stopwatchMode) _stopwatchSeconds++;
+            else _toolSeconds = Math.Max(0, _toolSeconds - 1);
+            UpdateToolTimerDisplay();
+            if (!_stopwatchMode && _toolSeconds == 0) { _toolTimerRunning = false; MessagePreviewText.Text = "Timer complete"; }
+        }
         if (!_focusIsRunning) return;
         _focusSecondsRemaining = Math.Max(0, _focusSecondsRemaining - 1);
         UpdateFocusDisplay();
@@ -219,6 +242,7 @@ public sealed partial class MainWindow : Window
         MediaPage.Visibility = Visibility.Collapsed;
         CalendarPage.Visibility = Visibility.Collapsed;
         SettingsPage.Visibility = Visibility.Collapsed;
+        ToolsPage.Visibility = Visibility.Collapsed;
         page.Visibility = Visibility.Visible;
     }
 
@@ -228,6 +252,7 @@ public sealed partial class MainWindow : Window
     private void MediaNav_Click(object sender, RoutedEventArgs e) => ShowPage(MediaPage);
     private void CalendarNav_Click(object sender, RoutedEventArgs e) => ShowPage(CalendarPage);
     private void SettingsNav_Click(object sender, RoutedEventArgs e) => ShowPage(SettingsPage);
+    private void ToolsNav_Click(object sender, RoutedEventArgs e) { ShowPage(ToolsPage); RefreshToolLists(); UpdateWorldClocks(); UpdateToolTimerDisplay(); }
 
     private void CollapseButton_Click(object sender, RoutedEventArgs e)
     {
@@ -467,6 +492,188 @@ public sealed partial class MainWindow : Window
     }
 
 
+
+
+    private async void GetWeatherButton_Click(object sender, RoutedEventArgs e)
+    {
+        string city = WeatherCityBox.Text.Trim();
+        if (city.Length == 0) { WeatherResultText.Text = "Enter a city."; return; }
+        WeatherResultText.Text = "Looking up weather…";
+        try
+        {
+            string geoUrl = "https://geocoding-api.open-meteo.com/v1/search?count=1&language=en&format=json&name=" + Uri.EscapeDataString(city);
+            using var geo = JsonDocument.Parse(await _http.GetStringAsync(geoUrl));
+            if (!geo.RootElement.TryGetProperty("results", out var results) || results.GetArrayLength() == 0)
+            { WeatherResultText.Text = "City not found."; return; }
+            var place = results[0];
+            double lat = place.GetProperty("latitude").GetDouble();
+            double lon = place.GetProperty("longitude").GetDouble();
+            string display = place.GetProperty("name").GetString() ?? city;
+            string weatherUrl = $"https://api.open-meteo.com/v1/forecast?latitude={lat.ToString(System.Globalization.CultureInfo.InvariantCulture)}&longitude={lon.ToString(System.Globalization.CultureInfo.InvariantCulture)}&current=temperature_2m,relative_humidity_2m,apparent_temperature,weather_code,wind_speed_10m";
+            using var weather = JsonDocument.Parse(await _http.GetStringAsync(weatherUrl));
+            var current = weather.RootElement.GetProperty("current");
+            WeatherResultText.Text = $"{display}\n{current.GetProperty("temperature_2m").GetDouble():0.#}°C · feels like {current.GetProperty("apparent_temperature").GetDouble():0.#}°C\nHumidity {current.GetProperty("relative_humidity_2m").GetInt32()}% · wind {current.GetProperty("wind_speed_10m").GetDouble():0.#} km/h\nWeather code {current.GetProperty("weather_code").GetInt32()} · live provider data";
+        }
+        catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException or JsonException or KeyNotFoundException)
+        { WeatherResultText.Text = "Weather unavailable. Check your connection and city name."; }
+    }
+
+    private async void ConvertCurrencyButton_Click(object sender, RoutedEventArgs e)
+    {
+        if (!decimal.TryParse(CurrencyAmountBox.Text, System.Globalization.NumberStyles.Number, System.Globalization.CultureInfo.InvariantCulture, out decimal amount) || amount < 0)
+        { CurrencyResultText.Text = "Enter a valid non-negative amount."; return; }
+        string from = CurrencyFromBox.Text.Trim().ToUpperInvariant();
+        string to = CurrencyToBox.Text.Trim().ToUpperInvariant();
+        if (from.Length != 3 || to.Length != 3) { CurrencyResultText.Text = "Use three-letter currency codes, e.g. USD and INR."; return; }
+        CurrencyResultText.Text = "Fetching exchange rate…";
+        try
+        {
+            using var response = JsonDocument.Parse(await _http.GetStringAsync($"https://api.frankfurter.app/latest?from={Uri.EscapeDataString(from)}&to={Uri.EscapeDataString(to)}"));
+            decimal rate = response.RootElement.GetProperty("rates").GetProperty(to).GetDecimal();
+            string date = response.RootElement.GetProperty("date").GetString() ?? "latest";
+            CurrencyResultText.Text = $"{amount:0.##} {from} = {(amount * rate):0.####} {to}\nRate {rate:0.######} · dated {date} · Frankfurter";
+        }
+        catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException or JsonException or KeyNotFoundException)
+        { CurrencyResultText.Text = "Rate unavailable. Check currency codes and internet connection."; }
+    }
+
+    private void TrackForegroundApp()
+    {
+        nint hwnd = GetForegroundWindow();
+        if (hwnd == 0) return;
+        _ = GetWindowThreadProcessId(hwnd, out uint processId);
+        if (processId == 0 || processId == (uint)Environment.ProcessId) return;
+        try
+        {
+            using var process = Process.GetProcessById((int)processId);
+            string name = process.ProcessName;
+            _foregroundSeconds[name] = _foregroundSeconds.GetValueOrDefault(name) + 1;
+            var top = _foregroundSeconds.OrderByDescending(p => p.Value).Take(4)
+                .Select(p => $"{p.Key} · {TimeSpan.FromSeconds(p.Value):hh\\:mm\\:ss}");
+            ScreenTimeText.Text = "This SAMY session only\n" + string.Join("\n", top);
+        }
+        catch (Exception ex) when (ex is ArgumentException or InvalidOperationException or System.ComponentModel.Win32Exception) { }
+    }
+
+    private void LoadToolData()
+    {
+        try
+        {
+            if (File.Exists(_linksPath)) _savedLinks.AddRange(JsonSerializer.Deserialize<List<SamyLink>>(File.ReadAllText(_linksPath)) ?? []);
+            if (File.Exists(_tasksPath)) _tasks.AddRange(JsonSerializer.Deserialize<List<SamyTask>>(File.ReadAllText(_tasksPath)) ?? []);
+        }
+        catch (Exception ex) when (ex is IOException or JsonException or UnauthorizedAccessException) { }
+        RefreshToolLists();
+    }
+
+    private void SaveToolData()
+    {
+        try
+        {
+            File.WriteAllText(_linksPath, JsonSerializer.Serialize(_savedLinks));
+            File.WriteAllText(_tasksPath, JsonSerializer.Serialize(_tasks));
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { }
+    }
+
+    private void RefreshToolLists()
+    {
+        SavedLinksList.Items.Clear();
+        foreach (var link in _savedLinks) SavedLinksList.Items.Add(link.Title + "  ·  " + link.Url);
+        TasksList.Items.Clear();
+        foreach (var task in _tasks) TasksList.Items.Add((task.Done ? "✓  " : "○  ") + task.Text);
+    }
+
+    private void SaveLinkButton_Click(object sender, RoutedEventArgs e)
+    {
+        string title = LinkTitleBox.Text.Trim();
+        string rawUrl = LinkUrlBox.Text.Trim();
+        if (title.Length == 0 || !Uri.TryCreate(rawUrl, UriKind.Absolute, out var uri) || (uri.Scheme != "https" && uri.Scheme != "http"))
+        { MessagePreviewText.Text = "Enter a title and a valid http/https URL."; return; }
+        _savedLinks.Add(new SamyLink { Title = title, Url = uri.ToString() });
+        SaveToolData(); RefreshToolLists(); LinkTitleBox.Text = ""; LinkUrlBox.Text = "";
+    }
+
+    private void SavedLinkItem_Click(object sender, ItemClickEventArgs e)
+    {
+        int index = SavedLinksList.Items.IndexOf(e.ClickedItem);
+        if (index < 0 || index >= _savedLinks.Count) return;
+        try { Process.Start(new ProcessStartInfo(_savedLinks[index].Url) { UseShellExecute = true }); }
+        catch (Exception ex) when (ex is InvalidOperationException or System.ComponentModel.Win32Exception) { MessagePreviewText.Text = "Windows couldn't open this link."; }
+    }
+
+    private void RemoveLinkButton_Click(object sender, RoutedEventArgs e)
+    {
+        int index = SavedLinksList.SelectedIndex;
+        if (index < 0 || index >= _savedLinks.Count) return;
+        _savedLinks.RemoveAt(index); SaveToolData(); RefreshToolLists();
+    }
+
+    private void AddTaskButton_Click(object sender, RoutedEventArgs e)
+    {
+        string value = TaskBox.Text.Trim();
+        if (value.Length == 0) return;
+        _tasks.Add(new SamyTask { Text = value }); TaskBox.Text = ""; SaveToolData(); RefreshToolLists();
+    }
+
+    private void CompleteTaskButton_Click(object sender, RoutedEventArgs e)
+    {
+        int index = TasksList.SelectedIndex;
+        if (index < 0 || index >= _tasks.Count) return;
+        _tasks[index].Done = !_tasks[index].Done; SaveToolData(); RefreshToolLists();
+    }
+
+    private void ToolTimerToggle_Click(object sender, RoutedEventArgs e) { _toolTimerRunning = !_toolTimerRunning; }
+    private void ToolTimerReset_Click(object sender, RoutedEventArgs e) { _toolTimerRunning = false; _toolSeconds = 25 * 60; _stopwatchSeconds = 0; _stopwatchMode = false; UpdateToolTimerDisplay(); }
+    private void ToolPomodoro_Click(object sender, RoutedEventArgs e) { _toolTimerRunning = false; _stopwatchMode = false; _toolSeconds = 25 * 60; UpdateToolTimerDisplay(); }
+    private void ToolStopwatch_Click(object sender, RoutedEventArgs e) { _toolTimerRunning = false; _stopwatchMode = true; _stopwatchSeconds = 0; UpdateToolTimerDisplay(); }
+    private void ToolCountdown_Click(object sender, RoutedEventArgs e)
+    {
+        if (!int.TryParse(CountdownMinutesBox.Text, out int minutes) || minutes < 1 || minutes > 1440)
+        { MessagePreviewText.Text = "Enter a countdown from 1 to 1440 minutes."; return; }
+        _toolTimerRunning = false; _stopwatchMode = false; _toolSeconds = minutes * 60; UpdateToolTimerDisplay();
+    }
+
+    private void UpdateToolTimerDisplay()
+    {
+        int seconds = _stopwatchMode ? _stopwatchSeconds : _toolSeconds;
+        ToolTimerText.Text = $"{seconds / 3600:00}:{(seconds / 60) % 60:00}:{seconds % 60:00}";
+    }
+
+    private void ConvertUnitButton_Click(object sender, RoutedEventArgs e)
+    {
+        if (!double.TryParse(UnitInputBox.Text, System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out double value))
+        { UnitResultText.Text = "Enter a valid number."; return; }
+        double result = UnitTypeBox.SelectedIndex switch
+        {
+            0 => value * 3.280839895,
+            1 => value * 2.2046226218,
+            2 => value * 9 / 5 + 32,
+            3 => value / 1024,
+            _ => double.NaN
+        };
+        string unit = UnitTypeBox.SelectedIndex switch { 0 => "ft", 1 => "lb", 2 => "°F", 3 => "GB", _ => "" };
+        UnitResultText.Text = $"{result:0.####} {unit}";
+    }
+
+    private void UpdateWorldClocks()
+    {
+        try
+        {
+            var kolkata = TimeZoneInfo.ConvertTime(DateTimeOffset.UtcNow, TimeZoneInfo.FindSystemTimeZoneById("India Standard Time"));
+            var london = TimeZoneInfo.ConvertTime(DateTimeOffset.UtcNow, TimeZoneInfo.FindSystemTimeZoneById("GMT Standard Time"));
+            var ny = TimeZoneInfo.ConvertTime(DateTimeOffset.UtcNow, TimeZoneInfo.FindSystemTimeZoneById("Eastern Standard Time"));
+            WorldClocksText.Text = $"Kolkata  {kolkata:ddd HH:mm}\nLondon  {london:ddd HH:mm}\nNew York  {ny:ddd HH:mm}";
+        }
+        catch (TimeZoneNotFoundException) { WorldClocksText.Text = "World clock data unavailable."; }
+    }
+
+    private void ShowMessageButton_Click(object sender, RoutedEventArgs e)
+    {
+        string message = MessageBox.Text.Trim();
+        MessagePreviewText.Text = message.Length == 0 ? "Enter a message first." : "★  " + message;
+    }
+
     private void LoadReminders()
     {
         try
@@ -589,6 +796,12 @@ public sealed partial class MainWindow : Window
     }
 
     [DllImport("user32.dll")]
+    private static extern nint GetForegroundWindow();
+
+    [DllImport("user32.dll")]
+    private static extern uint GetWindowThreadProcessId(nint hWnd, out uint processId);
+
+    [DllImport("user32.dll")]
     private static extern bool SetWindowPos(nint hWnd, int hWndInsertAfter, int x, int y, int cx, int cy, uint uFlags);
 
     [DllImport("user32.dll")]
@@ -604,3 +817,7 @@ public sealed class SamyReminder
     public DateTime DueAt { get; set; }
     public bool Notified { get; set; }
 }
+
+
+public sealed class SamyLink { public string Title { get; set; } = ""; public string Url { get; set; } = ""; }
+public sealed class SamyTask { public string Text { get; set; } = ""; public bool Done { get; set; } }
