@@ -30,6 +30,8 @@ public sealed partial class MainWindow : Window
     private readonly string _dataDirectory;
     private readonly string _notePath;
     private readonly string _clipboardPath;
+    private readonly string _clipboardPinsPath;
+    private readonly string _clipboardTimesPath;
     private readonly string _filesPath;
     private readonly string _settingsPath;
     private readonly string _remindersPath;
@@ -45,6 +47,11 @@ public sealed partial class MainWindow : Window
     private int _stopwatchSeconds;
     private readonly List<SamyReminder> _reminders = [];
     private readonly List<string> _clipboardItems = [];
+    private readonly List<string> _visibleClipboardItems = [];
+    private readonly HashSet<string> _pinnedClipboardItems = new(StringComparer.Ordinal);
+    private readonly Dictionary<string, DateTime> _clipboardCapturedAt = new(StringComparer.Ordinal);
+    private List<string> _clipboardExclusions = ["password", "one-time code", "verification code", "otp"];
+    private int _clipboardRetentionDays = 7;
     private readonly List<string> _fileItems = [];
     private TimeSpan _lastCpuTime;
     private DateTime _lastCpuSample = DateTime.UtcNow;
@@ -68,6 +75,8 @@ public sealed partial class MainWindow : Window
         Directory.CreateDirectory(_dataDirectory);
         _notePath = Path.Combine(_dataDirectory, "quick-note.txt");
         _clipboardPath = Path.Combine(_dataDirectory, "clipboard-history.json");
+        _clipboardPinsPath = Path.Combine(_dataDirectory, "clipboard-pins.json");
+        _clipboardTimesPath = Path.Combine(_dataDirectory, "clipboard-times.json");
         _filesPath = Path.Combine(_dataDirectory, "file-shelf.json");
         _settingsPath = Path.Combine(_dataDirectory, "settings.json");
         _remindersPath = Path.Combine(_dataDirectory, "reminders.json");
@@ -136,6 +145,18 @@ public sealed partial class MainWindow : Window
     {
         await LoadNoteAsync();
         LoadJsonList(_clipboardPath, _clipboardItems);
+        LoadJsonList(_clipboardPinsPath, _pinnedClipboardItems);
+        try
+        {
+            if (File.Exists(_clipboardTimesPath))
+            {
+                var savedTimes = JsonSerializer.Deserialize<Dictionary<string, DateTime>>(File.ReadAllText(_clipboardTimesPath));
+                if (savedTimes is not null) foreach (var pair in savedTimes) _clipboardCapturedAt[pair.Key] = pair.Value;
+            }
+        }
+        catch (Exception ex) when (ex is IOException or JsonException or UnauthorizedAccessException) { }
+        foreach (string item in _clipboardItems) if (!_clipboardCapturedAt.ContainsKey(item)) _clipboardCapturedAt[item] = DateTime.Now;
+        ApplyClipboardRetention();
         LoadJsonList(_filesPath, _fileItems);
         LoadReminders();
         LoadToolData();
@@ -333,11 +354,17 @@ public sealed partial class MainWindow : Window
                 JsonElement root = doc.RootElement;
                 _alwaysOnTop = root.TryGetProperty("alwaysOnTop", out var pin) && pin.GetBoolean();
                 _clipboardEnabled = root.TryGetProperty("clipboardEnabled", out var clip) && clip.GetBoolean();
+                if (root.TryGetProperty("clipboardRetentionDays", out var retention) && retention.TryGetInt32(out int days))
+                    _clipboardRetentionDays = days is 1 or 7 or 30 ? days : 0;
+                if (root.TryGetProperty("clipboardExclusions", out var exclusions) && exclusions.ValueKind == JsonValueKind.Array)
+                    _clipboardExclusions = exclusions.EnumerateArray().Where(v => v.ValueKind == JsonValueKind.String).Select(v => v.GetString() ?? "").Where(v => v.Length > 0).ToList();
             }
             using Microsoft.Win32.RegistryKey? key = Microsoft.Win32.Registry.CurrentUser.OpenSubKey(@"Software\Microsoft\Windows\CurrentVersion\Run");
             StartWithWindowsToggle.IsOn = key?.GetValue("SAMY") is not null;
             AlwaysOnTopToggle.IsOn = _alwaysOnTop;
             ClipboardToggle.IsOn = _clipboardEnabled;
+            ClipboardRetentionBox.SelectedIndex = _clipboardRetentionDays switch { 1 => 0, 7 => 1, 30 => 2, _ => 3 };
+            ClipboardExclusionsBox.Text = string.Join(", ", _clipboardExclusions);
             PinButton.Content = _alwaysOnTop ? "PINNED" : "PIN";
             if (_clipboardEnabled)
             {
@@ -360,7 +387,7 @@ public sealed partial class MainWindow : Window
     {
         try
         {
-            File.WriteAllText(_settingsPath, JsonSerializer.Serialize(new { alwaysOnTop = _alwaysOnTop, clipboardEnabled = _clipboardEnabled }));
+            File.WriteAllText(_settingsPath, JsonSerializer.Serialize(new { alwaysOnTop = _alwaysOnTop, clipboardEnabled = _clipboardEnabled, clipboardRetentionDays = _clipboardRetentionDays, clipboardExclusions = _clipboardExclusions }));
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { }
     }
@@ -377,9 +404,23 @@ public sealed partial class MainWindow : Window
             if (!data.Contains(StandardDataFormats.Text)) return;
             string text = (await data.GetTextAsync()).Trim();
             if (string.IsNullOrWhiteSpace(text) || text.Length > 4000 || _clipboardItems.FirstOrDefault() == text) return;
+            if (_clipboardExclusions.Any(word => text.Contains(word, StringComparison.OrdinalIgnoreCase)))
+            {
+                ClipboardStatusText.Text = "Skipped: matched a sensitive-content exclusion";
+                return;
+            }
             _clipboardItems.Insert(0, text);
-            if (_clipboardItems.Count > MaxClipboardItems) _clipboardItems.RemoveRange(MaxClipboardItems, _clipboardItems.Count - MaxClipboardItems);
-            SaveJsonList(_clipboardPath, _clipboardItems);
+            _clipboardCapturedAt[text] = DateTime.Now;
+            while (_clipboardItems.Count > MaxClipboardItems)
+            {
+                int removable = _clipboardItems.FindLastIndex(item => !_pinnedClipboardItems.Contains(item));
+                if (removable < 0) break;
+                string removed = _clipboardItems[removable];
+                _clipboardItems.RemoveAt(removable);
+                _clipboardCapturedAt.Remove(removed);
+            }
+            ApplyClipboardRetention();
+            SaveClipboardData();
             RefreshClipboardList();
         }
         catch (Exception ex) when (ex is COMException or InvalidOperationException or UnauthorizedAccessException) { }
@@ -388,17 +429,89 @@ public sealed partial class MainWindow : Window
     private void RefreshClipboardList()
     {
         ClipboardList.Items.Clear();
-        foreach (string item in _clipboardItems)
-            ClipboardList.Items.Add(item.Length > 110 ? item[..110] + "…" : item);
-        if (ClipboardList.Items.Count == 0) ClipboardList.Items.Add("No saved text yet");
+        _visibleClipboardItems.Clear();
+        string query = ClipboardSearchBox?.Text?.Trim() ?? "";
+        foreach (string item in _clipboardItems.Where(item => query.Length == 0 || item.Contains(query, StringComparison.OrdinalIgnoreCase)))
+        {
+            _visibleClipboardItems.Add(item);
+            string pin = _pinnedClipboardItems.Contains(item) ? "📌 " : "";
+            ClipboardList.Items.Add(pin + (item.Length > 110 ? item[..110] + "…" : item));
+        }
+        if (ClipboardList.Items.Count == 0) ClipboardList.Items.Add(query.Length == 0 ? "No saved text yet" : "No matches");
+    }
+
+    private void ClipboardSearchBox_TextChanged(object sender, TextChangedEventArgs e) => RefreshClipboardList();
+
+    private void SaveClipboardData()
+    {
+        SaveJsonList(_clipboardPath, _clipboardItems);
+        SaveJsonList(_clipboardPinsPath, _pinnedClipboardItems.ToList());
+        try { File.WriteAllText(_clipboardTimesPath, JsonSerializer.Serialize(_clipboardCapturedAt)); }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { }
+    }
+
+    private void ApplyClipboardRetention()
+    {
+        if (_clipboardRetentionDays <= 0) return;
+        DateTime cutoff = DateTime.Now.AddDays(-_clipboardRetentionDays);
+        foreach (string item in _clipboardItems.ToList())
+        {
+            if (_pinnedClipboardItems.Contains(item)) continue;
+            if (_clipboardCapturedAt.TryGetValue(item, out DateTime captured) && captured < cutoff)
+            {
+                _clipboardItems.Remove(item);
+                _clipboardCapturedAt.Remove(item);
+            }
+        }
+    }
+
+    private void PinClipboardButton_Click(object sender, RoutedEventArgs e)
+    {
+        int index = ClipboardList.SelectedIndex;
+        if (index < 0 || index >= _visibleClipboardItems.Count) return;
+        string item = _visibleClipboardItems[index];
+        if (!_pinnedClipboardItems.Add(item)) _pinnedClipboardItems.Remove(item);
+        SaveClipboardData();
+        RefreshClipboardList();
+        ClipboardStatusText.Text = _pinnedClipboardItems.Contains(item) ? "Item pinned · excluded from retention" : "Item unpinned";
+    }
+
+    private void DeleteClipboardButton_Click(object sender, RoutedEventArgs e)
+    {
+        int index = ClipboardList.SelectedIndex;
+        if (index < 0 || index >= _visibleClipboardItems.Count) return;
+        string item = _visibleClipboardItems[index];
+        _clipboardItems.Remove(item);
+        _pinnedClipboardItems.Remove(item);
+        _clipboardCapturedAt.Remove(item);
+        SaveClipboardData();
+        RefreshClipboardList();
+        ClipboardStatusText.Text = "Selected item deleted";
+    }
+
+    private void ClipboardRetentionBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (_loadingSettings || ClipboardRetentionBox.SelectedIndex < 0) return;
+        _clipboardRetentionDays = ClipboardRetentionBox.SelectedIndex switch { 0 => 1, 1 => 7, 2 => 30, _ => 0 };
+    }
+
+    private void SaveClipboardPrivacyButton_Click(object sender, RoutedEventArgs e)
+    {
+        _clipboardExclusions = ClipboardExclusionsBox.Text.Split(',', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries)
+            .Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+        ApplyClipboardRetention();
+        SaveClipboardData();
+        SaveSettings();
+        RefreshClipboardList();
+        ClipboardStatusText.Text = "Clipboard privacy settings saved";
     }
 
     private async void ClipboardItem_Click(object sender, ItemClickEventArgs e)
     {
-        int index = ClipboardList.Items.IndexOf(e.ClickedItem);
-        if (index < 0 || index >= _clipboardItems.Count) return;
+        int index = ClipboardList.SelectedIndex;
+        if (index < 0 || index >= _visibleClipboardItems.Count) return;
         var package = new DataPackage();
-        package.SetText(_clipboardItems[index]);
+        package.SetText(_visibleClipboardItems[index]);
         Clipboard.SetContent(package);
         ClipboardStatusText.Text = "Copied selected history item";
         await Task.CompletedTask;
@@ -416,7 +529,9 @@ public sealed partial class MainWindow : Window
     private void ClearClipboardButton_Click(object sender, RoutedEventArgs e)
     {
         _clipboardItems.Clear();
-        SaveJsonList(_clipboardPath, _clipboardItems);
+        _pinnedClipboardItems.Clear();
+        _clipboardCapturedAt.Clear();
+        SaveClipboardData();
         RefreshClipboardList();
         ClipboardStatusText.Text = "Clipboard history cleared";
     }

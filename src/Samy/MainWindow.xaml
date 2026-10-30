@@ -53,7 +53,13 @@
                     <StackPanel x:Name="ClipboardPage" Visibility="Collapsed" Spacing="12">
                         <TextBlock Text="Clipboard history" FontSize="25" Foreground="#FFF6F3FA" FontWeight="SemiBold"/>
                         <TextBlock Text="Text-only history stored on this device. Passwords and other sensitive text should not be copied while capture is enabled." Foreground="#FF9A9EAD" TextWrapping="Wrap"/>
-                        <StackPanel Orientation="Horizontal" Spacing="8"><Button Content="Copy latest" Click="CopyLatestButton_Click"/><Button Content="Clear history" Click="ClearClipboardButton_Click"/></StackPanel>
+                        <TextBox x:Name="ClipboardSearchBox" PlaceholderText="Search clipboard history..." TextChanged="ClipboardSearchBox_TextChanged"/>
+                        <StackPanel Orientation="Horizontal" Spacing="8">
+                            <Button Content="Copy latest" Click="CopyLatestButton_Click"/>
+                            <Button Content="Pin / unpin" Click="PinClipboardButton_Click"/>
+                            <Button Content="Delete selected" Click="DeleteClipboardButton_Click"/>
+                            <Button Content="Clear all" Click="ClearClipboardButton_Click"/>
+                        </StackPanel>
                         <TextBlock x:Name="ClipboardStatusText" Text="Capture is off." Foreground="#FFD7A5F4"/>
                         <ListView x:Name="ClipboardList" SelectionMode="Single" IsItemClickEnabled="True" ItemClick="ClipboardItem_Click" MaxHeight="480"/>
                     </StackPanel>
@@ -138,6 +144,15 @@
                             <ToggleSwitch x:Name="StartWithWindowsToggle" Header="Launch SAMY when I sign in" Toggled="StartWithWindowsToggle_Toggled"/>
                             <ToggleSwitch x:Name="ClipboardToggle" Header="Enable local clipboard history (text only)" Toggled="ClipboardToggle_Toggled"/>
                             <TextBlock Text="Clipboard capture is off by default. Turning it on stores copied text locally until you clear it or turn capture off." Foreground="#FF9A9EAD" TextWrapping="Wrap" FontSize="11"/>
+                            <TextBlock Text="RETENTION &amp; EXCLUSIONS" Foreground="#FFD7A5F4" FontSize="10"/>
+                            <ComboBox x:Name="ClipboardRetentionBox" SelectedIndex="1" SelectionChanged="ClipboardRetentionBox_SelectionChanged">
+                                <ComboBoxItem Content="Keep for 1 day"/>
+                                <ComboBoxItem Content="Keep for 7 days"/>
+                                <ComboBoxItem Content="Keep for 30 days"/>
+                                <ComboBoxItem Content="Never expire"/>
+                            </ComboBox>
+                            <TextBox x:Name="ClipboardExclusionsBox" PlaceholderText="Sensitive words to exclude, comma-separated"/>
+                            <Button Content="Save clipboard privacy settings" Click="SaveClipboardPrivacyButton_Click" HorizontalAlignment="Left"/>
                         </StackPanel></Border>
                         <Border Background="#FF151923" CornerRadius="14" Padding="16"><StackPanel Spacing="10"><TextBlock Text="PRIVACY &amp; ACCESSIBILITY" Foreground="#FFD7A5F4" FontSize="10"/><Button Content="Clear clipboard history" Click="ClearClipboardButton_Click" HorizontalAlignment="Left"/><Button Content="Open local data folder" Click="OpenDataFolderButton_Click" HorizontalAlignment="Left"/><TextBlock Text="Controls have accessible names, visible labels, keyboard focus, and touch-friendly sizing. Notes, settings, and file paths remain on this PC." Foreground="#FF9A9EAD" TextWrapping="Wrap"/></StackPanel></Border>
                     </StackPanel>
