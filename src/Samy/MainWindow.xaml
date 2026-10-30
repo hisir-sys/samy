@@ -62,7 +62,14 @@
                     </StackPanel>
                     <StackPanel x:Name="CalendarPage" Visibility="Collapsed" Spacing="12">
                         <TextBlock Text="Calendar" FontSize="25" Foreground="#FFF6F3FA" FontWeight="SemiBold"/>
-                        <Border Background="#FF151923" CornerRadius="14" Padding="16"><StackPanel Spacing="10"><TextBlock x:Name="CalendarDateText" FontSize="20" Foreground="#FFF6F3FA"/><CalendarView x:Name="CalendarControl" IsGroupLabelVisible="False" IsOutOfScopeEnabled="False"/><Button Content="Open Windows calendar" Click="OpenCalendarButton_Click" HorizontalAlignment="Left"/><TextBlock Text="SAMY shows a local date picker and opens your configured calendar app. Account calendar sync is not enabled." Foreground="#FF9A9EAD" TextWrapping="Wrap" FontSize="11"/></StackPanel></Border>
+                        <Border Background="#FF151923" CornerRadius="14" Padding="16"><StackPanel Spacing="10"><TextBlock x:Name="CalendarDateText" FontSize="20" Foreground="#FFF6F3FA"/><CalendarView x:Name="CalendarControl" IsGroupLabelVisible="False" IsOutOfScopeEnabled="False"/><Button Content="Open Windows calendar" Click="OpenCalendarButton_Click" HorizontalAlignment="Left"/>
+                            <TextBlock Text="LOCAL REMINDERS" Foreground="#FFD7A5F4" FontSize="10"/>
+                            <TextBox x:Name="ReminderTextBox" PlaceholderText="What should SAMY remind you about?"/>
+                            <TimePicker x:Name="ReminderTimePicker" ClockIdentifier="24HourClock"/>
+                            <Button Content="Add reminder for selected day" Click="AddReminderButton_Click" HorizontalAlignment="Left"/>
+                            <TextBlock x:Name="ReminderStatusText" Text="Reminders stay on this PC and appear inside SAMY." Foreground="#FF9A9EAD" TextWrapping="Wrap" FontSize="11"/>
+                            <ListView x:Name="RemindersList" MaxHeight="180"/>
+                            <TextBlock Text="SAMY provides a local date picker and in-app reminders, and can open your configured Windows calendar. It does not sync account calendars." Foreground="#FF9A9EAD" TextWrapping="Wrap" FontSize="11"/></StackPanel></Border>
                     </StackPanel>
                     <StackPanel x:Name="SettingsPage" Visibility="Collapsed" Spacing="14">
                         <TextBlock Text="Settings" FontSize="25" Foreground="#FFF6F3FA" FontWeight="SemiBold"/>
