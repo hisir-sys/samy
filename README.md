@@ -26,22 +26,24 @@ Planned captures:
 
 ## Features
 
-The current feature set includes:
+The current main branch includes:
 
-- Floating productivity workspace and expandable dashboard
-- Focus timer with presets, custom countdown, and stopwatch
-- Unit converters for length, weight, temperature, and data
-- Saved links with local persistence and URL validation
-- Persistent local checklist
-- World clocks for Kolkata, London, and New York
-- In-app message preview
-- Optional weather lookup using Open-Meteo
-- Optional currency conversion using Frankfurter
-- Opt-in persistent daily screen-time reports (process names and foreground duration only; stored locally)
-- Whole-device CPU and RAM monitoring (not just SAMY's own process)
-- Local clipboard, file shelf, media, notes, calendar/reminder, and settings surfaces
+- Floating workspace with collapse/expand, always-on-top, title-bar dragging, and monitor-aware positioning
+- Focus timer, Pomodoro, countdown, stopwatch, unit converters, saved links, checklist and world clocks
+- Local notes and opt-in clipboard history with search, pinning, deletion, retention and sensitive-word exclusions
+- Multiple named file shelves with drag-and-drop into shelves, open and remove actions
+- Image conversion (PNG/JPG/WEBP/BMP), image-to-PDF export and PDF-page-to-PNG rendering
+- Calendar reminders with daily, weekly and monthly recurrence
+- Opt-in HTTPS iCalendar feed subscriptions, persisted locally and refreshed at startup / every 12 hours
+- Whole-device CPU, RAM, system-disk free space, network totals, battery status and default audio endpoint status
+- Persistent opt-in screen-time reports and local Git coding-activity summaries
+- Authenticated generic HTTPS JSON API connection with bearer token encrypted using Windows DPAPI
+- Windows App SDK notification registration and reminder toast delivery path
+- Optional weather lookup and currency conversion
 
-Some integrations and deeper workflows remain in development. In particular, this is not a claim that every planned parity feature is complete: file conversion, multi-shelf drag and drop, recurring calendar feeds, extended system metrics (disk, network, battery and audio), coding analytics, native Windows notification delivery, and authenticated revenue/analytics provider integrations remain future work. SAMY does not fabricate analytics or revenue data.
+**Integration boundary:** the authenticated analytics feature currently supports a user-configured HTTPS JSON endpoint with a bearer token. Provider-specific OAuth flows and provider-specific analytics dashboards are not included yet. No fake metrics or revenue values are generated.
+
+**Windows verification still required:** real notification delivery/activation, clean installation and first launch, multiple-display dragging and DPI scaling, audio monitoring, file drag/drop, and conversion of representative files. CI build success is not a substitute for this manual desktop test.
 
 ## Technology
 

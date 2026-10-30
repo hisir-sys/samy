@@ -77,7 +77,7 @@ The current app already has a WinUI 3 floating window, home view, a basic focus 
 
 ## Implementation status (2026-10-30)
 
-The current feature branch adds a working Tools page with:
+The current main branch includes a working Tools page with:
 - Pomodoro preset, custom countdown and stopwatch timer controls.
 - Unit conversions for metres/feet, kilograms/pounds, Celsius/Fahrenheit and MB/GB.
 - Saved HTTP/HTTPS links with local JSON persistence and open/remove actions.
@@ -86,7 +86,14 @@ The current feature branch adds a working Tools page with:
 - Custom in-app status message preview.
 - Optional live weather lookup using Open-Meteo geocoding and forecast endpoints.
 - Optional currency conversion using Frankfurter's latest available rates.
-- Foreground application name/time sampling for the current SAMY session only.
+- Optional local screen-time reports persisted daily with 90-day retention.
+- Multiple named file shelves with drag-in and local path persistence.
+- Image format conversion, image-to-PDF, and PDF-page-to-PNG.
+- Recurring local reminders and persisted HTTPS iCalendar feed subscriptions.
+- Whole-device CPU/RAM/disk/network/battery/audio status.
+- Local Git coding activity summaries, without uploading source code.
+- Generic authenticated HTTPS JSON endpoint connection with DPAPI-protected bearer credentials.
+- Windows App SDK reminder notification delivery path and monitor-aware window positioning.
 
 Previously implemented modules remain available: floating workspace, local notes, clipboard history, file shelf, Windows media transport controls, local calendar reminders, settings/startup and basic SAMY process metrics.
 
