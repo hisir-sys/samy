@@ -1,0 +1,32 @@
+# Visual Studio / .NET
+.vs/
+[Bb]in/
+[Oo]bj/
+*.user
+*.suo
+*.userosscache
+*.sln.docstates
+
+# Build and packaging output
+artifacts/
+AppPackages/
+BundleArtifacts/
+Package.StoreAssociation.xml
+*.msix
+*.msixbundle
+*.appx
+*.appxbundle
+
+# Local tooling and secrets
+.env
+.env.*
+!.env.example
+secrets/
+*.pfx
+*.p12
+
+# OS/editor
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
