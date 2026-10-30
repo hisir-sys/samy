@@ -36,6 +36,8 @@ public sealed partial class MainWindow : Window
     private readonly string _tasksPath;
     private readonly List<SamyLink> _savedLinks = [];
     private readonly List<SamyTask> _tasks = [];
+    private static readonly HttpClient _http = new() { Timeout = TimeSpan.FromSeconds(8) };
+    private readonly Dictionary<string, int> _foregroundSeconds = new(StringComparer.OrdinalIgnoreCase);
     private int _toolSeconds = 25 * 60;
     private bool _toolTimerRunning;
     private bool _stopwatchMode;
@@ -134,6 +136,7 @@ public sealed partial class MainWindow : Window
         RefreshMetrics();
         CheckReminders();
         UpdateWorldClocks();
+        TrackForegroundApp();
         if (_toolTimerRunning)
         {
             if (_stopwatchMode) _stopwatchSeconds++;
@@ -489,6 +492,68 @@ public sealed partial class MainWindow : Window
 
 
 
+
+    private async void GetWeatherButton_Click(object sender, RoutedEventArgs e)
+    {
+        string city = WeatherCityBox.Text.Trim();
+        if (city.Length == 0) { WeatherResultText.Text = "Enter a city."; return; }
+        WeatherResultText.Text = "Looking up weather…";
+        try
+        {
+            string geoUrl = "https://geocoding-api.open-meteo.com/v1/search?count=1&language=en&format=json&name=" + Uri.EscapeDataString(city);
+            using var geo = JsonDocument.Parse(await _http.GetStringAsync(geoUrl));
+            if (!geo.RootElement.TryGetProperty("results", out var results) || results.GetArrayLength() == 0)
+            { WeatherResultText.Text = "City not found."; return; }
+            var place = results[0];
+            double lat = place.GetProperty("latitude").GetDouble();
+            double lon = place.GetProperty("longitude").GetDouble();
+            string display = place.GetProperty("name").GetString() ?? city;
+            string weatherUrl = $"https://api.open-meteo.com/v1/forecast?latitude={lat.ToString(System.Globalization.CultureInfo.InvariantCulture)}&longitude={lon.ToString(System.Globalization.CultureInfo.InvariantCulture)}&current=temperature_2m,relative_humidity_2m,apparent_temperature,weather_code,wind_speed_10m";
+            using var weather = JsonDocument.Parse(await _http.GetStringAsync(weatherUrl));
+            var current = weather.RootElement.GetProperty("current");
+            WeatherResultText.Text = $"{display}\n{current.GetProperty("temperature_2m").GetDouble():0.#}°C · feels like {current.GetProperty("apparent_temperature").GetDouble():0.#}°C\nHumidity {current.GetProperty("relative_humidity_2m").GetInt32()}% · wind {current.GetProperty("wind_speed_10m").GetDouble():0.#} km/h\nWeather code {current.GetProperty("weather_code").GetInt32()} · live provider data";
+        }
+        catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException or JsonException or KeyNotFoundException)
+        { WeatherResultText.Text = "Weather unavailable. Check your connection and city name."; }
+    }
+
+    private async void ConvertCurrencyButton_Click(object sender, RoutedEventArgs e)
+    {
+        if (!decimal.TryParse(CurrencyAmountBox.Text, System.Globalization.NumberStyles.Number, System.Globalization.CultureInfo.InvariantCulture, out decimal amount) || amount < 0)
+        { CurrencyResultText.Text = "Enter a valid non-negative amount."; return; }
+        string from = CurrencyFromBox.Text.Trim().ToUpperInvariant();
+        string to = CurrencyToBox.Text.Trim().ToUpperInvariant();
+        if (from.Length != 3 || to.Length != 3) { CurrencyResultText.Text = "Use three-letter currency codes, e.g. USD and INR."; return; }
+        CurrencyResultText.Text = "Fetching exchange rate…";
+        try
+        {
+            using var response = JsonDocument.Parse(await _http.GetStringAsync($"https://api.frankfurter.app/latest?from={Uri.EscapeDataString(from)}&to={Uri.EscapeDataString(to)}"));
+            decimal rate = response.RootElement.GetProperty("rates").GetProperty(to).GetDecimal();
+            string date = response.RootElement.GetProperty("date").GetString() ?? "latest";
+            CurrencyResultText.Text = $"{amount:0.##} {from} = {(amount * rate):0.####} {to}\nRate {rate:0.######} · dated {date} · Frankfurter";
+        }
+        catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException or JsonException or KeyNotFoundException)
+        { CurrencyResultText.Text = "Rate unavailable. Check currency codes and internet connection."; }
+    }
+
+    private void TrackForegroundApp()
+    {
+        nint hwnd = GetForegroundWindow();
+        if (hwnd == 0) return;
+        _ = GetWindowThreadProcessId(hwnd, out uint processId);
+        if (processId == 0 || processId == (uint)Environment.ProcessId) return;
+        try
+        {
+            using var process = Process.GetProcessById((int)processId);
+            string name = process.ProcessName;
+            _foregroundSeconds[name] = _foregroundSeconds.GetValueOrDefault(name) + 1;
+            var top = _foregroundSeconds.OrderByDescending(p => p.Value).Take(4)
+                .Select(p => $"{p.Key} · {TimeSpan.FromSeconds(p.Value):hh\\:mm\\:ss}");
+            ScreenTimeText.Text = "This SAMY session only\n" + string.Join("\n", top);
+        }
+        catch (Exception ex) when (ex is ArgumentException or InvalidOperationException or System.ComponentModel.Win32Exception) { }
+    }
+
     private void LoadToolData()
     {
         try
@@ -728,6 +793,12 @@ public sealed partial class MainWindow : Window
         _currentProcess.Dispose();
         SaveSettings();
     }
+
+    [DllImport("user32.dll")]
+    private static extern nint GetForegroundWindow();
+
+    [DllImport("user32.dll")]
+    private static extern uint GetWindowThreadProcessId(nint hWnd, out uint processId);
 
     [DllImport("user32.dll")]
     private static extern bool SetWindowPos(nint hWnd, int hWndInsertAfter, int x, int y, int cx, int cy, uint uFlags);
