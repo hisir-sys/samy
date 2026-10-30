@@ -1286,8 +1286,19 @@ public sealed partial class MainWindow : Window
 
     private void RegisterNativeNotifications()
     {
-        try { AppNotificationManager.Default.Register(); _notificationsRegistered = true; }
+        try
+        {
+            SetCurrentProcessExplicitAppUserModelID("SAMY.Desktop");
+            AppNotificationManager.Default.Register();
+            _notificationsRegistered = true;
+        }
         catch (Exception ex) { _notificationsRegistered = false; ProviderStatusText.Text = "Windows notifications could not be registered: " + ex.Message; }
+    }
+
+    private void TestNotificationButton_Click(object sender, RoutedEventArgs e)
+    {
+        ShowNativeNotification("SAMY notification test", "Windows notification delivery is enabled for SAMY.");
+        ReminderStatusText.Text = "Sent a notification test request to Windows. Check the notification centre.";
     }
 
     private void ShowNativeNotification(string title, string body)
@@ -1376,6 +1387,9 @@ public sealed partial class MainWindow : Window
     private static extern bool GetMonitorInfo(nint monitor, ref MonitorInfo info);
     [DllImport("user32.dll")]
     private static extern int GetSystemMetrics(int nIndex);
+
+    [DllImport("shell32.dll", CharSet = CharSet.Unicode)]
+    private static extern int SetCurrentProcessExplicitAppUserModelID(string appId);
 
     [DllImport("user32.dll")]
     private static extern uint GetClipboardSequenceNumber();
