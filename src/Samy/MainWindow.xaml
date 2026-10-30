@@ -103,6 +103,24 @@
                         <Border Background="#FF151923" CornerRadius="14" Padding="14"><StackPanel Spacing="8">
                             <TextBlock Text="LOCAL TASK CHECKLIST" Foreground="#FFD7A5F4" FontSize="10"/><TextBox x:Name="TaskBox" PlaceholderText="Add a task"/><Button Content="Add task" Click="AddTaskButton_Click" HorizontalAlignment="Left"/><ListView x:Name="TasksList" MaxHeight="150"/><Button Content="Complete selected task" Click="CompleteTaskButton_Click" HorizontalAlignment="Left"/>
                         </StackPanel></Border>
+                        <Border Background="#FF151923" CornerRadius="14" Padding="14"><StackPanel Spacing="8">
+                            <TextBlock Text="WEATHER · ONLINE" Foreground="#FFD7A5F4" FontSize="10"/>
+                            <TextBox x:Name="WeatherCityBox" PlaceholderText="City name (e.g. Kolkata)"/>
+                            <Button Content="Get current weather" Click="GetWeatherButton_Click" HorizontalAlignment="Left"/>
+                            <TextBlock x:Name="WeatherResultText" Foreground="#FFF6F3FA" TextWrapping="Wrap"/>
+                        </StackPanel></Border>
+                        <Border Background="#FF151923" CornerRadius="14" Padding="14"><StackPanel Spacing="8">
+                            <TextBlock Text="CURRENCY CONVERTER · ONLINE RATE" Foreground="#FFD7A5F4" FontSize="10"/>
+                            <TextBox x:Name="CurrencyAmountBox" PlaceholderText="Amount" Text="1"/>
+                            <StackPanel Orientation="Horizontal" Spacing="8"><TextBox x:Name="CurrencyFromBox" PlaceholderText="From (USD)" Width="110" Text="USD"/><TextBox x:Name="CurrencyToBox" PlaceholderText="To (INR)" Width="110" Text="INR"/></StackPanel>
+                            <Button Content="Convert using latest available rate" Click="ConvertCurrencyButton_Click" HorizontalAlignment="Left"/>
+                            <TextBlock x:Name="CurrencyResultText" Foreground="#FFF6F3FA" TextWrapping="Wrap"/>
+                        </StackPanel></Border>
+                        <Border Background="#FF151923" CornerRadius="14" Padding="14"><StackPanel Spacing="8">
+                            <TextBlock Text="SCREEN TIME · THIS SESSION" Foreground="#FFD7A5F4" FontSize="10"/>
+                            <TextBlock Text="SAMY can report the foreground app name and time while this window is open. It does not record keystrokes, screenshots or window contents." Foreground="#FF9A9EAD" TextWrapping="Wrap"/>
+                            <TextBlock x:Name="ScreenTimeText" Foreground="#FFF6F3FA" Text="Session tracking starts when SAMY opens."/>
+                        </StackPanel></Border>
                         <Border Background="#FF151923" CornerRadius="14" Padding="14"><StackPanel Spacing="8"><TextBlock Text="CONNECTED SERVICES" Foreground="#FFD7A5F4" FontSize="10"/><TextBlock Text="Weather, screen-time reporting, coding analytics, sales analytics and revenue integrations require provider/location consent and dedicated validation. They are not shown as connected in this build." Foreground="#FF9A9EAD" TextWrapping="Wrap"/></StackPanel></Border>
                     </StackPanel>
                     <StackPanel x:Name="SettingsPage" Visibility="Collapsed" Spacing="14">
