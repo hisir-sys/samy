@@ -73,3 +73,23 @@ The current app already has a WinUI 3 floating window, home view, a basic focus 
 3. Automated tests for persistence, retention, conversion logic, timer state, and module settings.
 4. Manual Windows 11 checks for touch, keyboard, multi-monitor positioning, drag/drop, startup, and suspend/resume.
 5. Privacy review for every module that reads clipboard, process metadata, calendar feeds, or connected-service data.
+
+
+## Implementation status (2026-10-30)
+
+The current feature branch adds a working Tools page with:
+- Pomodoro preset, custom countdown and stopwatch timer controls.
+- Unit conversions for metres/feet, kilograms/pounds, Celsius/Fahrenheit and MB/GB.
+- Saved HTTP/HTTPS links with local JSON persistence and open/remove actions.
+- Local task checklist with persistence and completion toggling.
+- World clocks for Kolkata, London and New York.
+- Custom in-app status message preview.
+- Optional live weather lookup using Open-Meteo geocoding and forecast endpoints.
+- Optional currency conversion using Frankfurter's latest available rates.
+- Foreground application name/time sampling for the current SAMY session only.
+
+Previously implemented modules remain available: floating workspace, local notes, clipboard history, file shelf, Windows media transport controls, local calendar reminders, settings/startup and basic SAMY process metrics.
+
+Not yet implemented to release quality: image/PDF file conversion, robust multi-note editor/checklist integration, clipboard search/pinning/individual deletion, multi-shelf drag/drop, recurring calendar events/feed subscriptions, whole-device system dashboard, persistent daily screen-time reports, coding-tool usage analytics, and authenticated analytics/revenue provider integrations. These require additional implementation and, for provider services, user-authorized credentials. Do not represent them as complete.
+
+The current Windows build is under CI validation. No installer is considered verified until the latest commit's installer workflow succeeds and its artifact is inspected.
