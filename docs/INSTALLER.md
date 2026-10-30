@@ -10,7 +10,7 @@ If a workflow is still running and no release has been published yet, open the r
 
 ## What the installer does
 
-- Installs SAMY for the current user without requiring an administrator prompt.
+- Installs SAMY for the the selected Windows installation scope without requiring an administrator prompt.
 - Adds a SAMY shortcut to the Start Menu.
 - Offers an optional Desktop shortcut.
 - Offers optional launch-at-sign-in through the current user's Startup folder.
