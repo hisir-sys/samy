@@ -130,9 +130,9 @@
                             <TextBlock x:Name="CurrencyResultText" Foreground="#FFF6F3FA" TextWrapping="Wrap"/>
                         </StackPanel></Border>
                         <Border Background="#FF151923" CornerRadius="14" Padding="14"><StackPanel Spacing="8">
-                            <TextBlock Text="SCREEN TIME · THIS SESSION" Foreground="#FFD7A5F4" FontSize="10"/>
-                            <TextBlock Text="SAMY can report the foreground app name and time while this window is open. It does not record keystrokes, screenshots or window contents." Foreground="#FF9A9EAD" TextWrapping="Wrap"/>
-                            <TextBlock x:Name="ScreenTimeText" Foreground="#FFF6F3FA" Text="Session tracking starts when SAMY opens."/>
+                            <TextBlock Text="SCREEN TIME · LOCAL DAILY REPORTS" Foreground="#FFD7A5F4" FontSize="10"/>
+                            <TextBlock Text="Optional process-name and foreground-duration tracking. Reports are stored locally; SAMY does not record keystrokes, screenshots or window contents." Foreground="#FF9A9EAD" TextWrapping="Wrap"/>
+                            <TextBlock x:Name="ScreenTimeText" Foreground="#FFF6F3FA" Text="Enable screen-time tracking in Settings to begin."/>
                         </StackPanel></Border>
                         <Border Background="#FF151923" CornerRadius="14" Padding="14"><StackPanel Spacing="8"><TextBlock Text="CONNECTED SERVICES" Foreground="#FFD7A5F4" FontSize="10"/><TextBlock Text="Weather, screen-time reporting, coding analytics, sales analytics and revenue integrations require provider/location consent and dedicated validation. They are not shown as connected in this build." Foreground="#FF9A9EAD" TextWrapping="Wrap"/></StackPanel></Border>
                     </StackPanel>
@@ -143,6 +143,7 @@
                             <ToggleSwitch x:Name="AlwaysOnTopToggle" Header="Keep SAMY always on top" Toggled="AlwaysOnTopToggle_Toggled"/>
                             <ToggleSwitch x:Name="StartWithWindowsToggle" Header="Launch SAMY when I sign in" Toggled="StartWithWindowsToggle_Toggled"/>
                             <ToggleSwitch x:Name="ClipboardToggle" Header="Enable local clipboard history (text only)" Toggled="ClipboardToggle_Toggled"/>
+                            <ToggleSwitch x:Name="ScreenTimeToggle" Header="Enable local screen-time reports" Toggled="ScreenTimeToggle_Toggled"/>
                             <TextBlock Text="Clipboard capture is off by default. Turning it on stores copied text locally until you clear it or turn capture off." Foreground="#FF9A9EAD" TextWrapping="Wrap" FontSize="11"/>
                             <TextBlock Text="RETENTION &amp; EXCLUSIONS" Foreground="#FFD7A5F4" FontSize="10"/>
                             <ComboBox x:Name="ClipboardRetentionBox" SelectedIndex="1" SelectionChanged="ClipboardRetentionBox_SelectionChanged">
