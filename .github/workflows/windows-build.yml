@@ -11,7 +11,20 @@ permissions:
   contents: write
 
 jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+      - name: Set up .NET 10
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+      - name: Run Samy.Core unit tests
+        run: dotnet test tests/Samy.Core.Tests/Samy.Core.Tests.csproj --configuration Release
+
   build:
+    needs: test
     runs-on: windows-latest
     steps:
       - name: Check out source
