@@ -3,8 +3,14 @@
     xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
     Title="SAMY">
-    <Grid x:Name="Root" Background="#FF0B0D12" Padding="14">
+    <Grid x:Name="Root" Background="#FF0B0D12" Padding="14" AllowDrop="True" DragEnter="Root_DragEnter">
         <Grid.RowDefinitions><RowDefinition Height="52"/><RowDefinition Height="*"/></Grid.RowDefinitions>
+        <Grid x:Name="NotchPill" Grid.RowSpan="2" Visibility="Collapsed">
+            <StackPanel Orientation="Horizontal" Spacing="8" HorizontalAlignment="Center" VerticalAlignment="Center">
+                <Ellipse Width="7" Height="7" Fill="#FFD7A5F4"/>
+                <TextBlock x:Name="NotchPillText" Text="SAMY" Foreground="#FFF6F3FA" FontSize="12" FontWeight="SemiBold"/>
+            </StackPanel>
+        </Grid>
         <Grid x:Name="DragRegion" Grid.Row="0" ColumnSpacing="12">
             <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
             <StackPanel Orientation="Horizontal" Spacing="10" VerticalAlignment="Center">
@@ -20,6 +26,7 @@
                 <TextBlock x:Name="ClockText" Text="--:--" Foreground="#FF9A9EAD" VerticalAlignment="Center"/>
             </StackPanel>
             <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="6">
+                <Button x:Name="KeepOpenButton" Content="KEEP OPEN" Click="KeepOpenButton_Click" Visibility="Collapsed" AutomationProperties.Name="Keep the notch open"/>
                 <Button x:Name="PinButton" Content="PIN" Click="PinButton_Click" AutomationProperties.Name="Toggle always on top"/>
                 <Button Content="−" Click="CollapseButton_Click" AutomationProperties.Name="Collapse SAMY"/>
                 <Button Content="×" Click="CloseButton_Click" AutomationProperties.Name="Close SAMY"/>
@@ -176,7 +183,8 @@
                         <TextBlock Text="Settings" FontSize="25" Foreground="#FFF6F3FA" FontWeight="SemiBold"/>
                         <Border Background="#FF151923" CornerRadius="14" Padding="16"><StackPanel Spacing="12">
                             <TextBlock Text="WINDOW BEHAVIOR" Foreground="#FFD7A5F4" FontSize="10"/>
-                            <ToggleSwitch x:Name="AlwaysOnTopToggle" Header="Keep SAMY always on top" Toggled="AlwaysOnTopToggle_Toggled"/>
+                            <ToggleSwitch x:Name="NotchModeToggle" Header="Dock SAMY as a top-edge notch (opens when you hover over it)" IsOn="True" Toggled="NotchModeToggle_Toggled"/>
+                            <ToggleSwitch x:Name="AlwaysOnTopToggle" Header="Keep SAMY always on top (floating window mode)" Toggled="AlwaysOnTopToggle_Toggled"/>
                             <ToggleSwitch x:Name="StartWithWindowsToggle" Header="Launch SAMY when I sign in" Toggled="StartWithWindowsToggle_Toggled"/>
                             <ToggleSwitch x:Name="ClipboardToggle" Header="Enable local clipboard history (text only)" Toggled="ClipboardToggle_Toggled"/>
                             <ToggleSwitch x:Name="ScreenTimeToggle" Header="Enable local screen-time reports" Toggled="ScreenTimeToggle_Toggled"/>

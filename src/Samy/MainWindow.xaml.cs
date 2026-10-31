@@ -107,6 +107,7 @@ public sealed partial class MainWindow : Window
         _calendarFeedsPath = Path.Combine(_dataDirectory, "calendar-feeds.json");
 
         ConfigureWindow();
+        InitializeNotch();
         _currentProcess = Process.GetCurrentProcess();
         _lastCpuTime = _currentProcess.TotalProcessorTime;
 
@@ -158,6 +159,7 @@ public sealed partial class MainWindow : Window
 
     private void PositionWindow(int width, int height)
     {
+        if (_notchMode) { ApplyNotchBounds(); return; }
         nint hwnd = WindowNative.GetWindowHandle(this);
         var info = new MonitorInfo { Size = Marshal.SizeOf<MonitorInfo>() };
         nint monitor = MonitorFromWindow(hwnd, 2);
@@ -212,6 +214,7 @@ public sealed partial class MainWindow : Window
         CheckReminders();
         UpdateWorldClocks();
         TickPomodoro();
+        UpdateNotchPill();
         TrackForegroundApp();
         if ((DateTime.UtcNow - _lastSystemExtrasRefresh).TotalSeconds >= 10) RefreshSystemDetails();
         if (_calendarFeedUrls.Count > 0 && !_calendarFeedRefreshRunning && (DateTime.UtcNow - _lastCalendarFeedRefresh).TotalHours >= 12) _ = RefreshCalendarFeedsAsync();
@@ -346,6 +349,7 @@ public sealed partial class MainWindow : Window
 
     private void CollapseButton_Click(object sender, RoutedEventArgs e)
     {
+        if (_notchMode) { CollapseNotch(suppressReopen: true); return; }
         _expanded = !_expanded;
         ExpandedContent.Visibility = _expanded ? Visibility.Visible : Visibility.Collapsed;
         PositionWindow(_expanded ? ExpandedWidth : CollapsedWidth, _expanded ? ExpandedHeight : 66);
@@ -408,6 +412,7 @@ public sealed partial class MainWindow : Window
                 using JsonDocument doc = JsonDocument.Parse(File.ReadAllText(_settingsPath));
                 JsonElement root = doc.RootElement;
                 _alwaysOnTop = root.TryGetProperty("alwaysOnTop", out var pin) && pin.GetBoolean();
+                _notchMode = !root.TryGetProperty("notchMode", out var notch) || notch.ValueKind != JsonValueKind.False;
                 _clipboardEnabled = root.TryGetProperty("clipboardEnabled", out var clip) && clip.GetBoolean();
                 _screenTimeEnabled = root.TryGetProperty("screenTimeEnabled", out var screen) && screen.GetBoolean();
                 if (root.TryGetProperty("clipboardRetentionDays", out var retention) && retention.TryGetInt32(out int days))
@@ -418,6 +423,7 @@ public sealed partial class MainWindow : Window
             using Microsoft.Win32.RegistryKey? key = Microsoft.Win32.Registry.CurrentUser.OpenSubKey(@"Software\Microsoft\Windows\CurrentVersion\Run");
             StartWithWindowsToggle.IsOn = key?.GetValue("SAMY") is not null;
             AlwaysOnTopToggle.IsOn = _alwaysOnTop;
+            NotchModeToggle.IsOn = _notchMode;
             ClipboardToggle.IsOn = _clipboardEnabled;
             ScreenTimeToggle.IsOn = _screenTimeEnabled;
             ClipboardRetentionBox.SelectedIndex = _clipboardRetentionDays switch { 1 => 0, 7 => 1, 30 => 2, _ => 3 };
@@ -437,14 +443,14 @@ public sealed partial class MainWindow : Window
             ClipboardToggle.IsOn = false;
         }
         finally { _loadingSettings = false; }
-        PositionWindow(_expanded ? ExpandedWidth : CollapsedWidth, _expanded ? ExpandedHeight : 66);
+        ApplyWindowChrome();
     }
 
     private void SaveSettings()
     {
         try
         {
-            File.WriteAllText(_settingsPath, JsonSerializer.Serialize(new { alwaysOnTop = _alwaysOnTop, clipboardEnabled = _clipboardEnabled, clipboardRetentionDays = _clipboardRetentionDays, clipboardExclusions = _clipboardExclusions, screenTimeEnabled = _screenTimeEnabled }));
+            File.WriteAllText(_settingsPath, JsonSerializer.Serialize(new { alwaysOnTop = _alwaysOnTop, notchMode = _notchMode, clipboardEnabled = _clipboardEnabled, clipboardRetentionDays = _clipboardRetentionDays, clipboardExclusions = _clipboardExclusions, screenTimeEnabled = _screenTimeEnabled }));
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { }
     }
@@ -1388,6 +1394,7 @@ public sealed partial class MainWindow : Window
     private void MainWindow_Closed(object sender, WindowEventArgs args)
     {
         _uiTimer.Stop();
+        _notchTimer?.Stop();
         if (_screenTimeEnabled) SaveScreenTime();
         _clipboardTimer.Stop();
         if (_notificationsRegistered)
