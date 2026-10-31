@@ -95,15 +95,36 @@
                         <TextBlock Text="Everyday tools" FontSize="25" Foreground="#FFF6F3FA" FontWeight="SemiBold"/>
                         <TextBlock Text="Local utilities. Your notes, links and settings stay on this PC." Foreground="#FF9A9EAD" TextWrapping="Wrap"/>
                         <Border Background="#FF151923" CornerRadius="14" Padding="14"><StackPanel Spacing="8">
-                            <TextBlock Text="POMODORO · COUNTDOWN · STOPWATCH" Foreground="#FFD7A5F4" FontSize="10"/>
+                            <TextBlock Text="POMODORO CYCLE" Foreground="#FFD7A5F4" FontSize="10"/>
+                            <TextBlock x:Name="PomodoroPhaseText" Text="Focus" Foreground="#FF9A9EAD"/>
+                            <TextBlock x:Name="PomodoroTimeText" Text="25:00" FontSize="36" Foreground="#FFF6F3FA"/>
+                            <TextBlock x:Name="PomodoroSessionsText" Foreground="#FF9A9EAD" FontSize="11"/>
+                            <StackPanel Orientation="Horizontal" Spacing="8"><Button x:Name="PomodoroStartButton" Content="Start" Click="PomodoroStart_Click"/><Button Content="Skip" Click="PomodoroSkip_Click"/><Button Content="Reset" Click="PomodoroReset_Click"/></StackPanel>
+                            <StackPanel Orientation="Horizontal" Spacing="8">
+                                <NumberBox x:Name="PomodoroFocusBox" Header="Focus (min)" Minimum="1" Maximum="180" Value="25" SpinButtonPlacementMode="Compact" Width="115"/>
+                                <NumberBox x:Name="PomodoroShortBox" Header="Short break" Minimum="1" Maximum="60" Value="5" SpinButtonPlacementMode="Compact" Width="115"/>
+                                <NumberBox x:Name="PomodoroLongBox" Header="Long break" Minimum="1" Maximum="120" Value="15" SpinButtonPlacementMode="Compact" Width="115"/>
+                                <NumberBox x:Name="PomodoroCyclesBox" Header="Sessions per cycle" Minimum="2" Maximum="12" Value="4" SpinButtonPlacementMode="Compact" Width="140"/>
+                            </StackPanel>
+                            <ToggleSwitch x:Name="PomodoroAutoToggle" Header="Start the next phase automatically" IsOn="True"/>
+                            <Button Content="Apply Pomodoro settings" Click="PomodoroApply_Click" HorizontalAlignment="Left"/>
+                            <TextBlock x:Name="PomodoroStatusText" Foreground="#FF9A9EAD" FontSize="11" TextWrapping="Wrap"/>
+                        </StackPanel></Border>
+                        <Border Background="#FF151923" CornerRadius="14" Padding="14"><StackPanel Spacing="8">
+                            <TextBlock Text="COUNTDOWN · STOPWATCH" Foreground="#FFD7A5F4" FontSize="10"/>
                             <TextBlock x:Name="ToolTimerText" Text="25:00" FontSize="36" Foreground="#FFF6F3FA"/>
-                            <StackPanel Orientation="Horizontal" Spacing="8"><Button Content="Start / pause" Click="ToolTimerToggle_Click"/><Button Content="Reset" Click="ToolTimerReset_Click"/><Button Content="Pomodoro" Click="ToolPomodoro_Click"/><Button Content="Stopwatch" Click="ToolStopwatch_Click"/></StackPanel>
+                            <StackPanel Orientation="Horizontal" Spacing="8"><Button Content="Start / pause" Click="ToolTimerToggle_Click"/><Button Content="Reset" Click="ToolTimerReset_Click"/><Button Content="25 min" Click="ToolPomodoro_Click"/><Button Content="Stopwatch" Click="ToolStopwatch_Click"/></StackPanel>
                             <TextBox x:Name="CountdownMinutesBox" PlaceholderText="Countdown minutes (e.g. 5)"/>
                             <Button Content="Set countdown" Click="ToolCountdown_Click" HorizontalAlignment="Left"/>
                         </StackPanel></Border>
                         <Border Background="#FF151923" CornerRadius="14" Padding="14"><StackPanel Spacing="8">
                             <TextBlock Text="UNIT CONVERTER" Foreground="#FFD7A5F4" FontSize="10"/>
-                            <ComboBox x:Name="UnitTypeBox" SelectedIndex="0"><ComboBoxItem Content="Length: metres to feet"/><ComboBoxItem Content="Weight: kilograms to pounds"/><ComboBoxItem Content="Temperature: Celsius to Fahrenheit"/><ComboBoxItem Content="Data: MB to GB"/></ComboBox>
+                            <ComboBox x:Name="UnitCategoryBox" Header="Category" MinWidth="200" SelectionChanged="UnitCategoryBox_SelectionChanged"/>
+                            <StackPanel Orientation="Horizontal" Spacing="8">
+                                <ComboBox x:Name="UnitFromBox" Header="From" MinWidth="140"/>
+                                <Button Content="⇄" Click="SwapUnitsButton_Click" VerticalAlignment="Bottom" AutomationProperties.Name="Swap units"/>
+                                <ComboBox x:Name="UnitToBox" Header="To" MinWidth="140"/>
+                            </StackPanel>
                             <TextBox x:Name="UnitInputBox" PlaceholderText="Enter a value"/>
                             <Button Content="Convert" Click="ConvertUnitButton_Click" HorizontalAlignment="Left"/>
                             <TextBlock x:Name="UnitResultText" Foreground="#FFF6F3FA" FontSize="18"/>
@@ -115,7 +136,10 @@
                             <ListView x:Name="SavedLinksList" IsItemClickEnabled="True" ItemClick="SavedLinkItem_Click" MaxHeight="150"/>
                             <Button Content="Remove selected link" Click="RemoveLinkButton_Click" HorizontalAlignment="Left"/>
                         </StackPanel></Border>
-                        <Border Background="#FF151923" CornerRadius="14" Padding="14"><StackPanel Spacing="8"><TextBlock Text="WORLD CLOCKS" Foreground="#FFD7A5F4" FontSize="10"/><TextBlock x:Name="WorldClocksText" Foreground="#FFF6F3FA" TextWrapping="Wrap"/></StackPanel></Border>
+                        <Border Background="#FF151923" CornerRadius="14" Padding="14"><StackPanel Spacing="8"><TextBlock Text="WORLD CLOCKS" Foreground="#FFD7A5F4" FontSize="10"/><TextBlock x:Name="WorldClocksText" Foreground="#FFF6F3FA" TextWrapping="Wrap"/>
+                            <StackPanel Orientation="Horizontal" Spacing="8"><TextBox x:Name="WorldClockAddBox" PlaceholderText="Add a zone, e.g. Asia/Tokyo" Width="230"/><Button Content="Add" Click="AddWorldClock_Click"/></StackPanel>
+                            <StackPanel Orientation="Horizontal" Spacing="8"><ComboBox x:Name="WorldClockRemoveBox" PlaceholderText="Choose a clock to remove" Width="230"/><Button Content="Remove" Click="RemoveWorldClock_Click"/></StackPanel>
+                            <TextBlock x:Name="WorldClockStatusText" Foreground="#FF9A9EAD" FontSize="11" TextWrapping="Wrap"/></StackPanel></Border>
                         <Border Background="#FF151923" CornerRadius="14" Padding="14"><StackPanel Spacing="8">
                             <TextBlock Text="CUSTOM MESSAGE" Foreground="#FFD7A5F4" FontSize="10"/><TextBox x:Name="MessageBox" PlaceholderText="Write a status message"/><Button Content="Show message" Click="ShowMessageButton_Click" HorizontalAlignment="Left"/><TextBlock x:Name="MessagePreviewText" Foreground="#FFD7A5F4" TextWrapping="Wrap"/>
                         </StackPanel></Border>

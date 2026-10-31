@@ -29,7 +29,7 @@ Planned captures:
 The current main branch includes:
 
 - Floating workspace with collapse/expand, always-on-top, title-bar dragging, and monitor-aware positioning
-- Focus timer, Pomodoro, countdown, stopwatch, unit converters, saved links, checklist and world clocks
+- Pomodoro cycles (configurable focus/break lengths, auto-advance, notifications), countdown, stopwatch, seven-category unit converter, saved links, checklist and configurable world clocks
 - Local notes and opt-in clipboard history with search, pinning, deletion, retention and sensitive-word exclusions
 - Multiple named file shelves with drag-and-drop into and out of shelves, open, copy-path and remove actions
 - Image conversion (PNG/JPG/WEBP/BMP), image-to-PDF export and PDF-page-to-PNG rendering

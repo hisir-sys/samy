@@ -15,14 +15,14 @@ The current app already has a WinUI 3 floating window, home view, a basic focus 
 | Home | Basic clock, focus, process metrics, quick note | Configurable cards, recent activity, next reminder, compact/expanded layouts |
 | Clipboard | Opt-in text-only history | Search, pin, delete individual items, bounded retention and sensitive-content exclusions implemented; richer previews remain |
 | File shelf | Stores selected file paths | Drag-and-drop in/out, multiple shelves, copy/open/remove actions, clear storage controls |
-| Timers & Focus | 25-minute focus countdown | Pomodoro cycles, configurable focus/break lengths, standalone countdown, stopwatch, water reminders |
+| Timers & Focus | Pomodoro cycle engine (configurable focus, short/long break and cycle length, auto-advance, skip), standalone countdown and stopwatch | Water reminders |
 | Notes | One quick note | Multiple notes, autosave, pinning, checklists |
 | Links | Not implemented | Saved bookmarks, custom search shortcuts, quick open |
 | Weather | Not implemented | Optional location/city weather with clear network/privacy controls |
-| Units | Not implemented | Length, weight, temperature, data, volume, speed, time and currency conversion; currency requires current rates |
+| Units | Seven categories (length, weight, temperature, data, volume, speed, time) with from/to pickers and swap; online currency conversion | Recent conversions history |
 | File Converter | Image conversion (PNG/JPG/WEBP/BMP), image-to-PDF and PDF-page-to-PNG export | Add ICO export, batch conversion and large-file stress tests |
 | Calendar | Local reminders with daily/weekly/monthly recurrence and persisted HTTPS .ics feed subscriptions refreshed at launch and every 12 hours | Add full timezone/RDATE/EXDATE recurrence coverage and feed deletion/management UI |
-| Clock | Local clock only | Multiple configurable world clocks |
+| Clock | Up to 8 user-configurable world clocks (IANA or Windows zone ids), saved locally | Searchable zone picker |
 | Screen Time | Opt-in local foreground-app duration summaries with daily JSON persistence and 90-day retention | Add report history UI and export; no keystroke, screenshot, or content capture |
 | System | Whole-device CPU/RAM plus disk free space, network totals, battery and default audio endpoint volume/mute | Add live network throughput graphs and additional disk/adapter selection |
 | Message | Not implemented | User-authored status banner with colour and duration controls |
@@ -119,3 +119,14 @@ These checks are intentionally not marked as passed by CI:
 - [ ] Test Git analytics against a local repository with known commits and no source upload.
 - [ ] Test bearer-token provider connection against a real test endpoint; verify invalid credentials are rejected and token file is DPAPI-protected.
 - [ ] Confirm Windows toast delivery, notification-centre display and behavior when notifications are disabled.
+
+
+## Upgrade batch (2026-10-31)
+
+- New `src/Samy.Core` library holds pure logic: `UnitConverter`, `PomodoroEngine`, `WorldClockList`.
+- New `tests/Samy.Core.Tests` (xUnit) covers conversions (including round-trips of every unit pair), Pomodoro phase/cycle behaviour, and world-clock validation. CI runs these on Ubuntu before the Windows build.
+- `MainWindow.Upgrades.cs` connects the library to the Tools page. Unit converter now has category + from/to pickers and a swap button; Pomodoro has a full focus/break cycle with notifications; world clocks can be added and removed.
+- Not yet verified on Windows 11: the new Tools-page controls, Pomodoro toast delivery, and IANA zone-id resolution. Add them to the manual checklist below.
+- [ ] Pomodoro: run a short cycle (set focus 1 min, break 1 min), confirm phase switches, toast on each boundary, Skip/Reset, and that settings persist across restart.
+- [ ] Unit converter: pick each category, swap units, convert negative/decimal and comma-decimal input.
+- [ ] World clocks: add `Asia/Tokyo`, reject `Mars/Olympus`, remove one, restart and confirm the list persists.

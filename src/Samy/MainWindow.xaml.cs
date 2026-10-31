@@ -211,6 +211,7 @@ public sealed partial class MainWindow : Window
         RefreshMetrics();
         CheckReminders();
         UpdateWorldClocks();
+        TickPomodoro();
         TrackForegroundApp();
         if ((DateTime.UtcNow - _lastSystemExtrasRefresh).TotalSeconds >= 10) RefreshSystemDetails();
         if (_calendarFeedUrls.Count > 0 && !_calendarFeedRefreshRunning && (DateTime.UtcNow - _lastCalendarFeedRefresh).TotalHours >= 12) _ = RefreshCalendarFeedsAsync();
@@ -987,6 +988,7 @@ public sealed partial class MainWindow : Window
         }
         catch (Exception ex) when (ex is IOException or JsonException or UnauthorizedAccessException) { }
         RefreshToolLists();
+        InitializeUpgrades();
     }
 
     private void SaveToolData()
@@ -1063,33 +1065,9 @@ public sealed partial class MainWindow : Window
         ToolTimerText.Text = $"{seconds / 3600:00}:{(seconds / 60) % 60:00}:{seconds % 60:00}";
     }
 
-    private void ConvertUnitButton_Click(object sender, RoutedEventArgs e)
-    {
-        if (!double.TryParse(UnitInputBox.Text, System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out double value))
-        { UnitResultText.Text = "Enter a valid number."; return; }
-        double result = UnitTypeBox.SelectedIndex switch
-        {
-            0 => value * 3.280839895,
-            1 => value * 2.2046226218,
-            2 => value * 9 / 5 + 32,
-            3 => value / 1024,
-            _ => double.NaN
-        };
-        string unit = UnitTypeBox.SelectedIndex switch { 0 => "ft", 1 => "lb", 2 => "°F", 3 => "GB", _ => "" };
-        UnitResultText.Text = $"{result:0.####} {unit}";
-    }
-
-    private void UpdateWorldClocks()
-    {
-        try
-        {
-            var kolkata = TimeZoneInfo.ConvertTime(DateTimeOffset.UtcNow, TimeZoneInfo.FindSystemTimeZoneById("India Standard Time"));
-            var london = TimeZoneInfo.ConvertTime(DateTimeOffset.UtcNow, TimeZoneInfo.FindSystemTimeZoneById("GMT Standard Time"));
-            var ny = TimeZoneInfo.ConvertTime(DateTimeOffset.UtcNow, TimeZoneInfo.FindSystemTimeZoneById("Eastern Standard Time"));
-            WorldClocksText.Text = $"Kolkata  {kolkata:ddd HH:mm}\nLondon  {london:ddd HH:mm}\nNew York  {ny:ddd HH:mm}";
-        }
-        catch (TimeZoneNotFoundException) { WorldClocksText.Text = "World clock data unavailable."; }
-    }
+    // Unit conversion, Pomodoro cycles and configurable world clocks live in MainWindow.Upgrades.cs,
+    // backed by the unit-tested Samy.Core library.
+    private void UpdateWorldClocks() => RenderWorldClocks();
 
     private void ShowMessageButton_Click(object sender, RoutedEventArgs e)
     {
