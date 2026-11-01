@@ -57,20 +57,33 @@ internal static class AdvancedServices
             UseShellExecute = false,
             CreateNoWindow = true
         };
+        start.ArgumentList.Add("-c");
+        start.ArgumentList.Add("core.quotepath=off"); // keep non-ASCII file names readable
         start.ArgumentList.Add("log");
         start.ArgumentList.Add("--since=30.days");
         start.ArgumentList.Add("--date=short");
         start.ArgumentList.Add("--pretty=format:@@%ad");
         start.ArgumentList.Add("--name-only");
-        using var process = Process.Start(start) ?? throw new InvalidOperationException("Git could not be started.");
-        string output = process.StandardOutput.ReadToEnd();
-        string error = process.StandardError.ReadToEnd();
-        if (!process.WaitForExit(10000))
+        Process process;
+        try { process = Process.Start(start) ?? throw new InvalidOperationException("Git could not be started."); }
+        catch (System.ComponentModel.Win32Exception)
+        { throw new InvalidOperationException("Git was not found. Install Git for Windows and make sure it is on your PATH."); }
+        string output, error;
+        using (process)
         {
-            process.Kill(true);
-            throw new TimeoutException("Git activity scan exceeded 10 seconds.");
+            // Drain both pipes concurrently so a full buffer can never block git, and the timeout always applies.
+            var outputTask = process.StandardOutput.ReadToEndAsync();
+            var errorTask = process.StandardError.ReadToEndAsync();
+            if (!process.WaitForExit(10000))
+            {
+                try { process.Kill(true); } catch (InvalidOperationException) { }
+                throw new TimeoutException("Git activity scan exceeded 10 seconds.");
+            }
+            process.WaitForExit();
+            output = outputTask.GetAwaiter().GetResult();
+            error = errorTask.GetAwaiter().GetResult();
+            if (process.ExitCode != 0) throw new InvalidOperationException(string.IsNullOrWhiteSpace(error) ? "This folder is not a readable Git repository." : error.Trim());
         }
-        if (process.ExitCode != 0) throw new InvalidOperationException(string.IsNullOrWhiteSpace(error) ? "This folder is not a readable Git repository." : error.Trim());
 
         var days = new HashSet<string>(StringComparer.Ordinal);
         var extensions = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
@@ -143,60 +156,9 @@ internal static class AdvancedServices
     }
 
     public static IReadOnlyList<SamyReminder> ParseCalendarFeed(string ics, string sourceUrl, DateTime from, int daysAhead = 90)
-    {
-        var unfolded = Regex.Replace(ics.Replace("\r\n ", "").Replace("\n ", ""), "\r?\n", "\n");
-        var results = new List<SamyReminder>();
-        foreach (Match match in Regex.Matches(unfolded, "BEGIN:VEVENT\\n(.*?)END:VEVENT", RegexOptions.Singleline | RegexOptions.IgnoreCase))
-        {
-            string block = match.Groups[1].Value;
-            string summary = ReadIcsValue(block, "SUMMARY") ?? "Calendar event";
-            string startRaw = ReadIcsValue(block, "DTSTART") ?? "";
-            if (!TryParseIcsDate(startRaw, out DateTime start)) continue;
-            string ruleLine = Regex.Match(block, "(?m)^RRULE:(.+)$", RegexOptions.IgnoreCase).Groups[1].Value;
-            string freq = ReadRule(ruleLine, "FREQ") ?? "ONCE";
-            int interval = int.TryParse(ReadRule(ruleLine, "INTERVAL"), out int parsedInterval) ? Math.Clamp(parsedInterval, 1, 365) : 1;
-            DateTime until = from.AddDays(daysAhead);
-            if (DateTime.TryParse(ReadRule(ruleLine, "UNTIL"), CultureInfo.InvariantCulture, DateTimeStyles.AssumeLocal, out var ruleUntil) && ruleUntil < until) until = ruleUntil;
-            DateTime occurrence = start;
-            int guard = 0;
-            while (occurrence <= until && guard++ < 400)
-            {
-                if (occurrence >= from.AddMinutes(-1))
-                    results.Add(new SamyReminder { Text = summary, DueAt = occurrence, FeedSource = sourceUrl });
-                occurrence = freq.ToUpperInvariant() switch
-                {
-                    "DAILY" => occurrence.AddDays(interval),
-                    "WEEKLY" => occurrence.AddDays(7 * interval),
-                    "MONTHLY" => occurrence.AddMonths(interval),
-                    "YEARLY" => occurrence.AddYears(interval),
-                    _ => DateTime.MaxValue
-                };
-                if (freq.Equals("ONCE", StringComparison.OrdinalIgnoreCase)) break;
-            }
-        }
-        return results;
-    }
-
-    private static string? ReadIcsValue(string block, string name)
-    {
-        var match = Regex.Match(block, "(?m)^" + Regex.Escape(name) + "(?:;[^:]*)?:(.*)$", RegexOptions.IgnoreCase);
-        return match.Success ? match.Groups[1].Value.Trim().Replace("\\n", "\n").Replace("\\,", ",").Replace("\\;", ";") : null;
-    }
-
-    private static string? ReadRule(string rule, string name)
-    {
-        var match = Regex.Match(rule, "(?:^|;)" + Regex.Escape(name) + "=([^;]+)", RegexOptions.IgnoreCase);
-        return match.Success ? match.Groups[1].Value : null;
-    }
-
-    private static bool TryParseIcsDate(string value, out DateTime date)
-    {
-        string[] formats = ["yyyyMMdd'T'HHmmss'Z'", "yyyyMMdd'T'HHmmss", "yyyyMMdd"];
-        if (value.EndsWith("Z", StringComparison.OrdinalIgnoreCase) && DateTime.TryParseExact(value, formats, CultureInfo.InvariantCulture, DateTimeStyles.AssumeUniversal, out var utc))
-        { date = utc.ToLocalTime(); return true; }
-        return DateTime.TryParseExact(value, formats, CultureInfo.InvariantCulture, DateTimeStyles.AssumeLocal, out date)
-            || DateTime.TryParse(value, CultureInfo.InvariantCulture, DateTimeStyles.AssumeLocal, out date);
-    }
+        => Samy.Core.IcsParser.Parse(ics, from, daysAhead)
+            .Select(e => new SamyReminder { Text = e.Summary, DueAt = e.Start, FeedSource = sourceUrl })
+            .ToList();
 
     public static string GetSystemExtras()
     {
@@ -216,11 +178,16 @@ internal static class AdvancedServices
         try
         {
             long sent = 0, received = 0;
-            foreach (var nic in NetworkInterface.GetAllNetworkInterfaces().Where(n => n.OperationalStatus == OperationalStatus.Up && n.NetworkInterfaceType != NetworkInterfaceType.Loopback))
+            foreach (var nic in NetworkInterface.GetAllNetworkInterfaces().Where(n => n.OperationalStatus == OperationalStatus.Up
+                         && n.NetworkInterfaceType is not (NetworkInterfaceType.Loopback or NetworkInterfaceType.Tunnel)))
             {
-                var stats = nic.GetIPv4Statistics();
-                sent += stats.BytesSent;
-                received += stats.BytesReceived;
+                try
+                {
+                    var stats = nic.GetIPv4Statistics();
+                    sent += stats.BytesSent;
+                    received += stats.BytesReceived;
+                }
+                catch (NetworkInformationException) { } // adapters without IPv4 are skipped, not fatal
             }
             DateTime sampleNow = DateTime.UtcNow;
             double elapsed = _lastNetworkSample == DateTime.MinValue ? 0 : (sampleNow - _lastNetworkSample).TotalSeconds;
@@ -232,7 +199,7 @@ internal static class AdvancedServices
         catch (Exception ex) when (ex is NetworkInformationException or InvalidOperationException) { parts.Add("Network · unavailable"); }
         try
         {
-            var enumerator = new MMDeviceEnumerator();
+            using var enumerator = new MMDeviceEnumerator();
             using var device = enumerator.GetDefaultAudioEndpoint(DataFlow.Render, Role.Multimedia);
             float volume = device.AudioEndpointVolume.MasterVolumeLevelScalar * 100f;
             bool muted = device.AudioEndpointVolume.Mute;

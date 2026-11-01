@@ -57,6 +57,7 @@ public sealed partial class MainWindow : Window
     private readonly Dictionary<string, Dictionary<string, int>> _screenTimeData = new(StringComparer.Ordinal);
     private DateTime _lastScreenTimeSave = DateTime.UtcNow;
     private bool _screenTimeEnabled;
+    private string _screenTimeDay = DateTime.Today.ToString("yyyy-MM-dd");
     private ulong _lastSystemIdle;
     private ulong _lastSystemKernel;
     private ulong _lastSystemUser;
@@ -215,6 +216,7 @@ public sealed partial class MainWindow : Window
         UpdateWorldClocks();
         TickPomodoro();
         UpdateNotchPill();
+        PollMediaIfDue();
         TrackForegroundApp();
         if ((DateTime.UtcNow - _lastSystemExtrasRefresh).TotalSeconds >= 10) RefreshSystemDetails();
         if (_calendarFeedUrls.Count > 0 && !_calendarFeedRefreshRunning && (DateTime.UtcNow - _lastCalendarFeedRefresh).TotalHours >= 12) _ = RefreshCalendarFeedsAsync();
@@ -223,7 +225,7 @@ public sealed partial class MainWindow : Window
             if (_stopwatchMode) _stopwatchSeconds++;
             else _toolSeconds = Math.Max(0, _toolSeconds - 1);
             UpdateToolTimerDisplay();
-            if (!_stopwatchMode && _toolSeconds == 0) { _toolTimerRunning = false; MessagePreviewText.Text = "Timer complete"; }
+            if (!_stopwatchMode && _toolSeconds == 0) { _toolTimerRunning = false; MessagePreviewText.Text = "Timer complete"; ShowNativeNotification("Timer complete", "Your countdown has finished."); }
         }
         if (!_focusIsRunning) return;
         _focusSecondsRemaining = Math.Max(0, _focusSecondsRemaining - 1);
@@ -233,6 +235,7 @@ public sealed partial class MainWindow : Window
             _focusIsRunning = false;
             FocusButton.Content = "Start";
             NoteStatusText.Text = "Focus session complete · time for a break";
+            ShowNativeNotification("Focus session complete", "Time for a break.");
         }
     }
 
@@ -341,7 +344,7 @@ public sealed partial class MainWindow : Window
     private void HomeNav_Click(object sender, RoutedEventArgs e) => ShowPage(HomePage);
     private void ClipboardNav_Click(object sender, RoutedEventArgs e) => ShowPage(ClipboardPage);
     private void FilesNav_Click(object sender, RoutedEventArgs e) => ShowPage(FilesPage);
-    private void MediaNav_Click(object sender, RoutedEventArgs e) => ShowPage(MediaPage);
+    private void MediaNav_Click(object sender, RoutedEventArgs e) { ShowPage(MediaPage); _ = RefreshMediaAsync(); }
     private void CalendarNav_Click(object sender, RoutedEventArgs e) => ShowPage(CalendarPage);
     private void SettingsNav_Click(object sender, RoutedEventArgs e) => ShowPage(SettingsPage);
     private void InsightsNav_Click(object sender, RoutedEventArgs e) { ShowPage(InsightsPage); RefreshSystemDetails(); }
@@ -472,6 +475,7 @@ public sealed partial class MainWindow : Window
                 ClipboardStatusText.Text = "Skipped: matched a sensitive-content exclusion";
                 return;
             }
+            _clipboardItems.Remove(text); // copying the same text again moves it to the top instead of duplicating it
             _clipboardItems.Insert(0, text);
             _clipboardCapturedAt[text] = DateTime.Now;
             while (_clipboardItems.Count > MaxClipboardItems)
@@ -571,7 +575,7 @@ public sealed partial class MainWindow : Window
 
     private async void ClipboardItem_Click(object sender, ItemClickEventArgs e)
     {
-        int index = ClipboardList.SelectedIndex;
+        int index = ClipboardList.Items.IndexOf(e.ClickedItem);
         if (index < 0 || index >= _visibleClipboardItems.Count) return;
         var package = new DataPackage();
         package.SetText(_visibleClipboardItems[index]);
@@ -841,14 +845,18 @@ public sealed partial class MainWindow : Window
             {
                 MediaTitleText.Text = "No active media session";
                 MediaArtistText.Text = "Start playing media in a supported Windows app.";
+                _mediaTitle = ""; _mediaPlaying = false;
                 return;
             }
             var info = await _mediaSession.TryGetMediaPropertiesAsync();
             MediaTitleText.Text = string.IsNullOrWhiteSpace(info.Title) ? "Untitled media" : info.Title;
             MediaArtistText.Text = string.IsNullOrWhiteSpace(info.Artist) ? "Windows media session" : info.Artist;
+            _mediaTitle = MediaTitleText.Text;
+            _mediaPlaying = _mediaSession.GetPlaybackInfo()?.PlaybackStatus == GlobalSystemMediaTransportControlsSessionPlaybackStatus.Playing;
         }
         catch (Exception ex) when (ex is COMException or InvalidOperationException)
         {
+            _mediaPlaying = false;
             MediaTitleText.Text = "Media controls unavailable";
             MediaArtistText.Text = "This app or session does not expose Windows media controls.";
         }
@@ -892,7 +900,7 @@ public sealed partial class MainWindow : Window
             string weatherUrl = $"https://api.open-meteo.com/v1/forecast?latitude={lat.ToString(System.Globalization.CultureInfo.InvariantCulture)}&longitude={lon.ToString(System.Globalization.CultureInfo.InvariantCulture)}&current=temperature_2m,relative_humidity_2m,apparent_temperature,weather_code,wind_speed_10m";
             using var weather = JsonDocument.Parse(await _http.GetStringAsync(weatherUrl));
             var current = weather.RootElement.GetProperty("current");
-            WeatherResultText.Text = $"{display}\n{current.GetProperty("temperature_2m").GetDouble():0.#}°C · feels like {current.GetProperty("apparent_temperature").GetDouble():0.#}°C\nHumidity {current.GetProperty("relative_humidity_2m").GetInt32()}% · wind {current.GetProperty("wind_speed_10m").GetDouble():0.#} km/h\nWeather code {current.GetProperty("weather_code").GetInt32()} · live provider data";
+            WeatherResultText.Text = $"{display}\n{current.GetProperty("temperature_2m").GetDouble():0.#}°C · feels like {current.GetProperty("apparent_temperature").GetDouble():0.#}°C\nHumidity {current.GetProperty("relative_humidity_2m").GetInt32()}% · wind {current.GetProperty("wind_speed_10m").GetDouble():0.#} km/h\n{Samy.Core.WeatherCodes.Describe(current.GetProperty("weather_code").GetInt32())} · live provider data";
         }
         catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException or JsonException or KeyNotFoundException)
         { WeatherResultText.Text = "Weather unavailable. Check your connection and city name."; }
@@ -905,6 +913,7 @@ public sealed partial class MainWindow : Window
         string from = CurrencyFromBox.Text.Trim().ToUpperInvariant();
         string to = CurrencyToBox.Text.Trim().ToUpperInvariant();
         if (from.Length != 3 || to.Length != 3) { CurrencyResultText.Text = "Use three-letter currency codes, e.g. USD and INR."; return; }
+        if (from == to) { CurrencyResultText.Text = $"{amount:0.##} {from} = {amount:0.##} {to}"; return; }
         CurrencyResultText.Text = "Fetching exchange rate…";
         try
         {
@@ -920,6 +929,13 @@ public sealed partial class MainWindow : Window
     private void TrackForegroundApp()
     {
         if (!_screenTimeEnabled) return;
+        string dayKey = DateTime.Today.ToString("yyyy-MM-dd");
+        if (dayKey != _screenTimeDay)
+        {
+            SaveScreenTime();               // close out the previous day
+            _foregroundSeconds.Clear();     // and start today from zero
+            _screenTimeDay = dayKey;
+        }
         nint hwnd = GetForegroundWindow();
         if (hwnd == 0) return;
         _ = GetWindowThreadProcessId(hwnd, out uint processId);
@@ -964,7 +980,7 @@ public sealed partial class MainWindow : Window
     {
         try
         {
-            string today = DateTime.Today.ToString("yyyy-MM-dd");
+            string today = _screenTimeDay;
             _screenTimeData[today] = new Dictionary<string, int>(_foregroundSeconds, StringComparer.OrdinalIgnoreCase);
             foreach (string oldDay in _screenTimeData.Keys.OrderByDescending(k => k).Skip(90).ToList()) _screenTimeData.Remove(oldDay);
             File.WriteAllText(_screenTimePath, JsonSerializer.Serialize(_screenTimeData));
@@ -1218,7 +1234,7 @@ public sealed partial class MainWindow : Window
     {
         if (_calendarFeedRefreshRunning || _calendarFeedUrls.Count == 0) return;
         _calendarFeedRefreshRunning = true;
-        int added = 0, failed = 0;
+        int added = 0, failed = 0, removedTotal = 0;
         try
         {
             using var client = new HttpClient { Timeout = TimeSpan.FromSeconds(12) };
@@ -1229,7 +1245,7 @@ public sealed partial class MainWindow : Window
                     string ics = await client.GetStringAsync(url);
                     if (ics.Length > 2_000_000) { failed++; continue; }
                     // Replace this feed's upcoming entries with its latest published view.
-                    _reminders.RemoveAll(existing => existing.FeedSource == url && existing.DueAt >= DateTime.Now);
+                    removedTotal += _reminders.RemoveAll(existing => existing.FeedSource == url && existing.DueAt >= DateTime.Now);
                     var imported = AdvancedServices.ParseCalendarFeed(ics, url, DateTime.Now);
                     foreach (var item in imported)
                     {
@@ -1240,9 +1256,9 @@ public sealed partial class MainWindow : Window
                 catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException or IOException or InvalidOperationException)
                 { failed++; }
             }
-            if (added > 0) { SaveReminders(); RefreshRemindersList(); }
+            if (added > 0 || removedTotal > 0) { SaveReminders(); RefreshRemindersList(); }
             _lastCalendarFeedRefresh = DateTime.UtcNow;
-            ReminderStatusText.Text = $"Calendar feeds refreshed · {added} new events · {failed} feed errors · {_calendarFeedUrls.Count} subscriptions saved.";
+            ReminderStatusText.Text = $"Calendar feeds refreshed · {added} upcoming events synced · {failed} feed errors · {_calendarFeedUrls.Count} subscriptions saved.";
         }
         finally { _calendarFeedRefreshRunning = false; }
     }
@@ -1325,7 +1341,7 @@ public sealed partial class MainWindow : Window
             ProviderTokenBox.Password = "";
             ProviderStatusText.Text = $"Connected · HTTP {result.StatusCode} · {result.Summary}. No metrics are inferred; this endpoint's response was verified."; 
         }
-        catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException or InvalidOperationException or IOException or CryptographicException or UnauthorizedAccessException)
+        catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException or InvalidOperationException or IOException or CryptographicException or UnauthorizedAccessException or FormatException)
         { ProviderStatusText.Text = "Connection failed · " + ex.Message; }
     }
 
@@ -1345,6 +1361,7 @@ public sealed partial class MainWindow : Window
     {
         DispatcherQueue.TryEnqueue(() =>
         {
+            if (_notchMode) ExpandNotch();
             Activate();
             ShowPage(CalendarPage);
         });

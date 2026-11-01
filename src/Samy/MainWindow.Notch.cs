@@ -24,6 +24,10 @@ public sealed partial class MainWindow
     private int _outsideTicks;
     private nint _dockMonitor;
     private DispatcherQueueTimer? _notchTimer;
+    private string _mediaTitle = "";
+    private bool _mediaPlaying;
+    private bool _mediaPollRunning;
+    private DateTime _lastMediaPoll = DateTime.MinValue;
 
     private void InitializeNotch()
     {
@@ -139,6 +143,8 @@ public sealed partial class MainWindow
     /// <summary>Stay open while a dropdown is showing or a dialog/file picker owned by SAMY is in front.</summary>
     private bool NotchShouldStayOpen(nint hwnd)
     {
+        // A held mouse button means a drag or a text selection is in progress; never close underneath it.
+        if ((GetAsyncKeyState(0x01) & 0x8000) != 0) return true;
         try
         {
             if (Content?.XamlRoot is { } root && VisualTreeHelper.GetOpenPopupsForXamlRoot(root).Count > 0) return true;
@@ -182,9 +188,27 @@ public sealed partial class MainWindow
     private void UpdateNotchPill()
     {
         if (!_notchMode || _expanded) return;
-        NotchPillText.Text = _upgradesReady && _pomodoro.IsRunning
-            ? $"{PomodoroEngine_Label()} {_pomodoro.RemainingSeconds / 60:00}:{_pomodoro.RemainingSeconds % 60:00}"
-            : DateTime.Now.ToString("HH:mm");
+        if (_upgradesReady && _pomodoro.IsRunning)
+            NotchPillText.Text = $"{PomodoroEngine_Label()} {_pomodoro.RemainingSeconds / 60:00}:{_pomodoro.RemainingSeconds % 60:00}";
+        else if (_mediaPlaying && _mediaTitle.Length > 0)
+            NotchPillText.Text = "♪ " + (_mediaTitle.Length > 20 ? _mediaTitle[..19] + "…" : _mediaTitle);
+        else
+            NotchPillText.Text = DateTime.Now.ToString("HH:mm");
+    }
+
+    private void PollMediaIfDue()
+    {
+        if (_mediaPollRunning || (DateTime.UtcNow - _lastMediaPoll).TotalSeconds < 3) return;
+        _lastMediaPoll = DateTime.UtcNow;
+        _mediaPollRunning = true;
+        _ = PollMediaAsync();
+    }
+
+    private async Task PollMediaAsync()
+    {
+        try { await RefreshMediaAsync(); }
+        catch (Exception) { _mediaPlaying = false; } // background refresh must never crash the app
+        finally { _mediaPollRunning = false; }
     }
 
     private string PomodoroEngine_Label() => Samy.Core.PomodoroEngine.Label(_pomodoro.Phase);
@@ -224,6 +248,7 @@ public sealed partial class MainWindow
     [StructLayout(LayoutKind.Sequential)]
     private struct NativePoint { public int X, Y; }
 
+    [DllImport("user32.dll")] private static extern short GetAsyncKeyState(int virtualKey);
     [DllImport("user32.dll")] private static extern bool GetCursorPos(out NativePoint point);
     [DllImport("user32.dll")] private static extern bool GetWindowRect(nint hwnd, out NativeRect rect);
     [DllImport("user32.dll")] private static extern nint GetWindow(nint hwnd, uint command);

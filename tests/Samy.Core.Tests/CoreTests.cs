@@ -319,3 +319,123 @@ public class WorldClockTests
     [InlineData("UTC", "UTC")]
     public void Labels_use_the_city_part(string id, string label) => Assert.Equal(label, WorldClockList.Label(id));
 }
+
+public class IcsParserTests
+{
+    private static readonly DateTime Now = new(2026, 11, 1, 9, 0, 0, DateTimeKind.Local);
+
+    private static string Event(params string[] lines) =>
+        "BEGIN:VCALENDAR\r\nBEGIN:VEVENT\r\n" + string.Join("\r\n", lines) + "\r\nEND:VEVENT\r\nEND:VCALENDAR\r\n";
+
+    [Fact]
+    public void Reads_a_single_local_event()
+    {
+        var events = IcsParser.Parse(Event("SUMMARY:Dentist", "DTSTART:20261105T103000"), Now);
+        Assert.Equal(1, events.Count);
+        Assert.Equal("Dentist", events[0].Summary);
+        Assert.Equal(new DateTime(2026, 11, 5, 10, 30, 0), events[0].Start);
+    }
+
+    [Fact]
+    public void Converts_utc_starts_to_local_time()
+    {
+        var events = IcsParser.Parse(Event("SUMMARY:Call", "DTSTART:20261105T100000Z"), Now);
+        var expected = new DateTime(2026, 11, 5, 10, 0, 0, DateTimeKind.Utc).ToLocalTime();
+        Assert.Equal(1, events.Count);
+        Assert.Equal(expected, events[0].Start);
+    }
+
+    [Fact]
+    public void Reads_all_day_events_with_value_parameter()
+    {
+        var events = IcsParser.Parse(Event("SUMMARY:Holiday", "DTSTART;VALUE=DATE:20261110"), Now);
+        Assert.Equal(1, events.Count);
+        Assert.Equal(new DateTime(2026, 11, 10), events[0].Start);
+    }
+
+    [Fact]
+    public void Skips_cancelled_events()
+    {
+        var events = IcsParser.Parse(Event("SUMMARY:Gone", "STATUS:CANCELLED", "DTSTART:20261105T103000"), Now);
+        Assert.Equal(0, events.Count);
+    }
+
+    [Fact]
+    public void Skips_events_in_the_past_and_beyond_the_window()
+    {
+        string ics = Event("SUMMARY:Old", "DTSTART:20250101T100000") + Event("SUMMARY:Far", "DTSTART:20270601T100000");
+        Assert.Equal(0, IcsParser.Parse(ics, Now).Count);
+    }
+
+    [Fact]
+    public void Unfolds_long_lines_and_unescapes_text()
+    {
+        var events = IcsParser.Parse(Event("SUMMARY:Team sync\\, weekly\r\n  review", "DTSTART:20261105T103000"), Now);
+        Assert.Equal("Team sync, weekly review", events[0].Summary);
+    }
+
+    [Fact]
+    public void Weekly_rule_with_compact_UNTIL_stops_at_the_end_date()
+    {
+        var events = IcsParser.Parse(Event("SUMMARY:Standup", "DTSTART:20261102T090000", "RRULE:FREQ=WEEKLY;UNTIL=20261116T235959Z"), Now);
+        Assert.Equal(new[] { new DateTime(2026, 11, 2, 9, 0, 0), new DateTime(2026, 11, 9, 9, 0, 0), new DateTime(2026, 11, 16, 9, 0, 0) },
+            events.Select(e => e.Start));
+    }
+
+    [Fact]
+    public void Count_limits_the_number_of_occurrences()
+    {
+        var events = IcsParser.Parse(Event("SUMMARY:Course", "DTSTART:20261103T180000", "RRULE:FREQ=DAILY;COUNT=3"), Now);
+        Assert.Equal(3, events.Count);
+        Assert.Equal(new DateTime(2026, 11, 5, 18, 0, 0), events[2].Start);
+    }
+
+    [Fact]
+    public void Interval_is_respected()
+    {
+        var events = IcsParser.Parse(Event("SUMMARY:Biweekly", "DTSTART:20261102T090000", "RRULE:FREQ=WEEKLY;INTERVAL=2"), Now, 30);
+        Assert.Equal(new[] { new DateTime(2026, 11, 2, 9, 0, 0), new DateTime(2026, 11, 16, 9, 0, 0), new DateTime(2026, 11, 30, 9, 0, 0) },
+            events.Select(e => e.Start));
+    }
+
+    [Fact]
+    public void An_old_daily_series_still_shows_todays_and_upcoming_occurrences()
+    {
+        // Started two years ago: far more than the loop guard would reach by stepping one day at a time.
+        var events = IcsParser.Parse(Event("SUMMARY:Water", "DTSTART:20240101T100000", "RRULE:FREQ=DAILY"), Now, 3);
+        Assert.Equal(new[] { new DateTime(2026, 11, 1, 10, 0, 0), new DateTime(2026, 11, 2, 10, 0, 0), new DateTime(2026, 11, 3, 10, 0, 0) }, // the window ends 4 Nov 09:00, before that day's 10:00
+            events.Select(e => e.Start));
+    }
+
+    [Fact]
+    public void Count_still_applies_to_a_series_that_started_in_the_past()
+    {
+        // 5 daily occurrences starting 1 Oct finished on 5 Oct, so none remain.
+        var events = IcsParser.Parse(Event("SUMMARY:Done", "DTSTART:20261001T100000", "RRULE:FREQ=DAILY;COUNT=5"), Now);
+        Assert.Equal(0, events.Count);
+    }
+
+    [Fact]
+    public void Results_are_sorted_by_start_time()
+    {
+        string ics = Event("SUMMARY:B", "DTSTART:20261110T100000") + Event("SUMMARY:A", "DTSTART:20261105T100000");
+        Assert.Equal(new[] { "A", "B" }, IcsParser.Parse(ics, Now).Select(e => e.Summary));
+    }
+
+    [Theory]
+    [InlineData("")]
+    [InlineData("not a calendar")]
+    [InlineData("BEGIN:VEVENT\r\nSUMMARY:No start\r\nEND:VEVENT")]
+    public void Garbage_input_yields_no_events(string ics) => Assert.Equal(0, IcsParser.Parse(ics, Now).Count);
+}
+
+public class WeatherCodeTests
+{
+    [Theory]
+    [InlineData(0, "Clear sky")]
+    [InlineData(3, "Overcast")]
+    [InlineData(63, "Rain")]
+    [InlineData(95, "Thunderstorm")]
+    [InlineData(999, "Unknown conditions")]
+    public void Describes_codes(int code, string text) => Assert.Equal(text, WeatherCodes.Describe(code));
+}

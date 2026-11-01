@@ -28,7 +28,7 @@ Planned captures:
 
 The current main branch includes:
 
-- Floating workspace with collapse/expand, always-on-top, title-bar dragging, and monitor-aware positioning
+- Top-edge notch: a small pill docked to the top of the screen that opens on hover (or when you drag a file onto it); optional floating-window mode
 - Pomodoro cycles (configurable focus/break lengths, auto-advance, notifications), countdown, stopwatch, seven-category unit converter, saved links, checklist and configurable world clocks
 - Local notes and opt-in clipboard history with search, pinning, deletion, retention and sensitive-word exclusions
 - Multiple named file shelves with drag-and-drop into and out of shelves, open, copy-path and remove actions

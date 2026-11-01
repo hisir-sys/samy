@@ -130,3 +130,14 @@ These checks are intentionally not marked as passed by CI:
 - [ ] Pomodoro: run a short cycle (set focus 1 min, break 1 min), confirm phase switches, toast on each boundary, Skip/Reset, and that settings persist across restart.
 - [ ] Unit converter: pick each category, swap units, convert negative/decimal and comma-decimal input.
 - [ ] World clocks: add `Asia/Tokyo`, reject `Mars/Olympus`, remove one, restart and confirm the list persists.
+
+
+## Notch mode and audit fixes (2026-11-01)
+
+- **Top-edge notch:** SAMY now docks flush to the top of the screen as a small pill (clock, Pomodoro countdown, or the playing track) and opens when the pointer touches it or a file is dragged onto it. It closes about 0.6 s after the pointer leaves, and stays open while a dropdown, a dialog/file picker or a mouse drag is active. KEEP OPEN pins it; the Settings toggle returns to the floating window. Pushing the pointer against another display's top edge moves the notch there.
+- **Fixed:** clicking a clipboard row could copy the previously selected item; copying the same text twice created duplicates; countdown and focus timers finished silently (now a Windows toast); screen-time seconds were never reset at midnight and kept accumulating; Git analytics crashed the app when Git was not installed and could hang on a full output pipe; the audio device enumerator leaked every 10 s; one network adapter without IPv4 blanked the whole network line (tunnel adapters are now excluded to avoid double counting); calendar-feed events past their UNTIL date, beyond COUNT, or marked CANCELLED were still reminded, and a repeating series older than ~400 occurrences never showed; emptied feeds weren't persisted; weather showed a raw code instead of words; same-currency conversion errored; the media page only updated on a manual refresh.
+- The calendar parser and weather-code text now live in `Samy.Core` with unit tests.
+- [ ] Notch: hover opens, leaving closes; drag a file onto the pill opens the shelf; open a dropdown or file picker and confirm it stays open; drag a file out to Explorer without it closing; test on two displays with different scaling; toggle notch mode off and on in Settings.
+- [ ] Notch pill shows the track title while music plays and the Pomodoro countdown while it runs.
+- [ ] Screen time: leave tracking on across midnight and confirm a new day starts from zero.
+- [ ] Git analytics on a machine without Git shows a clear message instead of closing the app.
